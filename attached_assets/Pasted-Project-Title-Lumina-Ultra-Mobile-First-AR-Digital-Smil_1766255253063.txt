@@ -1,0 +1,57 @@
+Project Title: Lumina Ultra - Mobile-First AR Digital Smile Design (DSD) & Veneer Simulator
+
+Goal: Build a high-performance, mobile-responsive web application for dentists to perform real-time Digital Smile Design (DSD) and realistic veneer simulations directly in the browser.
+
+Core Architecture (Critical for Speed & Free Tier):
+
+Zero-Lag Strategy: Do NOT use server-side processing for video. Use Client-Side JavaScript with MediaPipe Face Mesh (via CDN) to process the webcam feed locally on the user's phone/laptop.
+
+Backend: Minimal Flask (Python) just to serve the static files. This keeps server load near zero, perfect for Replit's free tier.
+
+Mobile-First: The UI/UX must be responsive, defaulting to the back camera on mobile devices if available (environment facing), or front camera (user facing) for selfies.
+
+Feature Set 1: The "Ultimate" DSD Overlay (7-Line System) Using FaceMesh landmarks, draw the following dynamic, AR-tracked lines in real-time colors (high contrast cyan/yellow):
+
+Facial Midline: Vertical line through glabella/nose tip.
+
+Dental Midline: Vertical line through the contact point of central incisors (track deviation).
+
+Inter-Pupillary Line: Horizontal reference line connecting pupils.
+
+Commissural Line: Horizontal line connecting lip corners.
+
+Smile Curve: A smooth cubic bezier curve following the lower lip vermilion border.
+
+Gingival Zeniths: Points/curve marking the highest gum points of the anterior teeth.
+
+Golden Proportion Grid: A dynamic 6-tooth grid overlay (Centrals 1.618 : Laterals 1.0 : Canines 0.618) that scales with the user's mouth width.
+
+Feature Set 2: Seamless Veneer Mockup (The "Wow" Factor)
+
+Smart Masking: Instead of a flat white block, generate a precise dental arch polygon using the inner lip contours and teeth landmarks.
+
+Realistic Blending: Use HTML5 Canvas globalCompositeOperation (specifically "soft-light" or "overlay") to blend a "Bleach White" shade over the natural teeth while preserving the shadows and separation between teeth. This prevents the "fake white block" look.
+
+Opacity Slider: Add a slider to adjust the veneer transparency (Natural vs. Hollywood White).
+
+Feature Set 3: Clinical Data Dashboard (The "Time Saver")
+
+Real-Time Measurements: Calculate and display the Width/Length ratio of the central incisors in real-time (e.g., "W/L: 80%").
+
+Snapshot Logic: A "Capture DSD" button that freezes the video, draws the high-res overlays, and offers a .jpg download labeled with the patient's ID.
+
+Technical Constraints:
+
+Use mediapipe tasks-vision via CDN (no heavy npm installs).
+
+Ensure the canvas matches the video dimensions exactly to prevent "drifting" lines on mobile screens.
+
+Error Handling: If the camera permission is denied, show a clear clinical instruction manual.
+
+Output Request:
+
+main.py (Flask setup).
+
+templates/index.html (The "Brain" - containing all JS for MediaPipe, AR logic, Canvas drawing, and Camera handling).
+
+static/style.css (Professional, dark-mode dental clinic aesthetic).

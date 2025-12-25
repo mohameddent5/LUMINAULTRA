@@ -1,0 +1,64 @@
+Project Title: Lumina Live - AR Dental Smile Design & Mockup App
+
+Goal: Create a high-performance web application for dentists that uses Real-Time Augmented Reality (AR) to visualize smile designs and veneer mockups on a live webcam feed.
+
+Technical Stack:
+
+Backend: Python (Flask) - Used for serving the application and authentication.
+
+Frontend AI (CRITICAL): MediaPipe Face Mesh (JavaScript/Web Solution).
+
+Constraint: The tracking must run client-side to ensure smooth, 30FPS real-time performance without server lag.
+
+Frontend Graphics: HTML5 Canvas or Three.js for rendering the lines and veneers over the video feed.
+
+Deployment: PythonAnywhere.
+
+Core Features Required:
+
+Live AR Tracking:
+
+The app must open the webcam immediately.
+
+All dental reference lines must stick to the patient's face in real-time as they move, speak, or smile.
+
+Clinical Reference Overlays (Toggleable): Draw the following lines dynamically on the live feed:
+
+Real Midline: Tracks the actual dental midline.
+
+Ideal Midline: Fixed vertical axis based on the pupils/glabella.
+
+Ideal Canine Guide: Connects ideal canine tips.
+
+Smile Curve: Tracks the curvature of the lower lip.
+
+Gingival Curve: Outlines the gum line.
+
+Tooth Proportions: A Golden Proportion grid overlay for the anterior 6 teeth.
+
+"Veneer Mockup" Button (The "Bonus" Feature):
+
+Add a prominent button labeled "Simulate Veneers."
+
+When clicked, overlay a white, ideal tooth texture/mask over the user's existing teeth (using the Face Mesh lips and teeth landmarks to mask the area).
+
+This mockup must track perfectly with the mouth opening and closing.
+
+Clinical Readiness:
+
+The UI must be clean and professional (dark mode preferred).
+
+Include a "Capture" button to save a snapshot of the current analysis to the device.
+
+Output Request:
+
+Provide the main.py (Flask server code).
+
+Provide the templates/index.html containing the JavaScript logic to load MediaPipe FaceMesh from a CDN and handle the AR drawing on the HTML5 Canvas.
+
+Ensure the code handles the camera permissions correctly.
+
+Why this specific prompt?
+"Client-side/JavaScript": This ensures the lines don't "lag" behind the patient's face. If you run this on the Python server, there would be a 1-second delay, which is useless for a "mirror" effect.
+
+"Masking/Texture": This tells the AI how to technically achieve the "Veneer" look—by creating a graphical mask over the specific teeth landmarks.

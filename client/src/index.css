@@ -1,0 +1,65 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: 'Inter', sans-serif;
+  --font-heading: 'Outfit', sans-serif;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+
+  /* Lumina Ultra Dark Theme Palette */
+  --color-background: hsl(220 15% 6%);
+  --color-foreground: hsl(220 10% 90%);
+
+  --color-card: hsl(220 15% 10%);
+  --color-card-foreground: hsl(220 10% 90%);
+
+  --color-popover: hsl(220 15% 10%);
+  --color-popover-foreground: hsl(220 10% 90%);
+
+  /* Cyan - Action / Midlines */
+  --color-primary: hsl(180 100% 50%);
+  --color-primary-foreground: hsl(220 15% 6%);
+
+  /* Yellow - Reference Lines */
+  --color-secondary: hsl(50 100% 50%);
+  --color-secondary-foreground: hsl(220 15% 6%);
+
+  --color-muted: hsl(220 15% 16%);
+  --color-muted-foreground: hsl(220 10% 60%);
+
+  --color-accent: hsl(220 15% 20%);
+  --color-accent-foreground: hsl(220 10% 90%);
+
+  --color-destructive: hsl(0 84% 60%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+
+  --color-border: hsl(220 15% 16%);
+  --color-input: hsl(220 15% 16%);
+  --color-ring: hsl(180 100% 50%);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply font-sans antialiased bg-background text-foreground selection:bg-primary/20 selection:text-primary;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading tracking-tight;
+  }
+}
+
+@layer utilities {
+  .text-glow {
+    text-shadow: 0 0 10px hsla(180, 100%, 50%, 0.5);
+  }
+  .glass-panel {
+    @apply bg-black/40 backdrop-blur-md border border-white/10;
+  }
+}
