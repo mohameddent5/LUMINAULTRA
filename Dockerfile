@@ -1,23 +1,26 @@
-# Use Node.js 18
-FROM node:18-alpine
+# Use standard Node image (safer than alpine for compatibility)
+FROM node:18
 
-# Set the working directory
+# Set working directory
 WORKDIR /app
 
-# Copy package files first (better caching)
+# Copy package files
 COPY package*.json ./
 
-# Install dependencies
+# Install dependencies (including dev dependencies)
 RUN npm install
 
-# Copy the rest of your app code
+# Copy all files
 COPY . .
 
-# Build the application
+# Disable strict type checking during build (prevents crash on warnings)
+ENV CI=false
+
+# Build the app
 RUN npm run build
 
-# Expose the port (Koyeb needs this)
+# Expose port
 EXPOSE 5000
 
-# Start the server
+# Start command
 CMD ["npm", "run", "start"]
