@@ -108,6 +108,7 @@ export function ARCanvas() {
   const [showFacialGuides, setShowFacialGuides] = useState(true);
   const [showDentalGuides, setShowDentalGuides] = useState(true);
   const [showGingival, setShowGingival] = useState(true);
+  const [showDepth, setShowDepth] = useState(false);
   const [showMeasurements, setShowMeasurements] = useState(true);
   const [showDeviation, setShowDeviation] = useState(true);
   
@@ -124,6 +125,7 @@ export function ARCanvas() {
   const depthLastSampleRef = useRef(0);
   const depthLoadStartedRef = useRef(false);
   const depthCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const depthHeatRef = useRef<HTMLCanvasElement | null>(null);
   const [depthStatus, setDepthStatus] = useState<"idle" | "loading" | "ready" | "absent">("idle");
 
   useEffect(() => {
@@ -769,9 +771,23 @@ export function ARCanvas() {
             sctx.drawImage(video, 0, 0, 256, 256);
             const frame = sctx.getImageData(0, 0, 256, 256);
             void estimator
-              .meanDepth(frame)
-              .then((value) => {
-                if (value !== null && Number.isFinite(value)) depthAvailableRef.current = true;
+              .depthMap(frame)
+              .then((map) => {
+                if (!map || map.length === 0) return;
+                // depthMap is already min-max normalised to 0..1, so its mean is
+                // exactly what meanDepth() returns — one inference serves both
+                // the fusion number and the overlay instead of two.
+                let sum = 0;
+                for (let i = 0; i < map.length; i += 1) sum += map[i];
+                const mean = sum / map.length;
+                if (Number.isFinite(mean)) depthAvailableRef.current = true;
+                if (!depthHeatRef.current) {
+                  const heat = document.createElement("canvas");
+                  heat.width = DEPTH_INPUT_SIZE;
+                  heat.height = DEPTH_INPUT_SIZE;
+                  depthHeatRef.current = heat;
+                }
+                paintDepthHeat(depthHeatRef.current, map);
               })
               .catch(() => {
                 /* a bad frame must never stop the preview */
@@ -794,6 +810,17 @@ export function ARCanvas() {
     if (cameraFacingMode === "user") {
       overlayCtx.scale(-1, 1);
       overlayCtx.translate(-overlayCanvas.width, 0);
+    }
+
+    // The heat map is painted off-loop (once per depth sample, ~2 s) and only
+    // composited here, so this is one drawImage per frame — no per-pixel work
+    // on the render path.
+    if (showDepth && depthHeatRef.current) {
+      overlayCtx.save();
+      overlayCtx.globalAlpha = 0.45;
+      overlayCtx.imageSmoothingEnabled = true;
+      overlayCtx.drawImage(depthHeatRef.current, 0, 0, overlayCanvas.width, overlayCanvas.height);
+      overlayCtx.restore();
     }
 
     if (results.faceLandmarks) {
@@ -821,7 +848,7 @@ export function ARCanvas() {
 
     overlayCtx.restore();
     requestRef.current = requestAnimationFrame(draw);
-  }, [calculateDSDMeasurements, showFacialGuides, showDentalGuides, showGingival, showMeasurements, showDeviation, cameraFacingMode, photoMode]);
+  }, [calculateDSDMeasurements, showFacialGuides, showDentalGuides, showGingival, showMeasurements, showDeviation, showDepth, cameraFacingMode, photoMode]);
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(draw);
@@ -1677,6 +1704,7 @@ End of Report | Lumina Ultra™ v1.0
             { label: "Dental", state: showDentalGuides, setter: setShowDentalGuides },
             { label: "Gingival", state: showGingival, setter: setShowGingival },
             { label: "Measures", state: showMeasurements, setter: setShowMeasurements },
+            { label: "Depth", state: showDepth, setter: setShowDepth },
           ].map((item) => (
             <div key={item.label} className="flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/5">
               <Label className="text-xs font-medium cursor-pointer">{item.label}</Label>
