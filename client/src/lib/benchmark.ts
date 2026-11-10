@@ -299,7 +299,7 @@ export function evaluate(gt: BenchmarkFile, pred: PredictionsFile, tau = 2.0): B
     byLandmark.set(key, list);
   }
   result.per_landmark_accepted = {};
-  for (const key of [...byLandmark.keys()].sort()) {
+  for (const key of Array.from(byLandmark.keys()).sort()) {
     result.per_landmark_accepted[key] = stats(byLandmark.get(key) as number[]);
   }
 
@@ -313,7 +313,7 @@ export function evaluate(gt: BenchmarkFile, pred: PredictionsFile, tau = 2.0): B
     byTooth.set(key, list);
   }
   result.per_tooth_accepted = {};
-  for (const key of [...byTooth.keys()].sort()) {
+  for (const key of Array.from(byTooth.keys()).sort()) {
     result.per_tooth_accepted[key] = stats(byTooth.get(key) as number[]);
   }
 
