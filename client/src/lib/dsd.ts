@@ -27,6 +27,8 @@
 import { EVIDENCE_BY_ID, classify, resolveBand, weightedHarmony } from "./dsdEvidence";
 import type { Band, MetricEvidence, ProfileId } from "./dsdEvidence";
 import type { Landmark } from "./dentalNet";
+import { foreshorteningFactor, poseGate } from "./poseDepth";
+import type { PoseEstimate } from "./poseDepth";
 
 export interface CalibrationScale {
   /** Millimetres per image pixel, from the iris/known-distance calibration. */
@@ -210,6 +212,11 @@ export interface AnalyzeInput {
   calibration: CalibrationScale | null;
   profile: ProfileId;
   sex?: "male" | "female" | null;
+  /**
+   * Optional head pose. When supplied and beyond the measurement-grade limit,
+   * millimetre metrics are withheld instead of reported with rotation error.
+   */
+  pose?: PoseEstimate | null;
 }
 
 const NA = "n/a";
@@ -226,21 +233,37 @@ export function analyze(input: AnalyzeInput): DsdReport {
   const notes: string[] = [];
   const points = face.points;
 
-  const calibrated =
+  const scaleOk =
     calibration !== null &&
     Number.isFinite(calibration.mmPerPx) &&
     calibration.mmPerPx > 0 &&
     calibration.imageWidth > 0 &&
     calibration.imageHeight > 0;
 
-  // Millimetres per full normalised extent, per axis. These differ whenever the
-  // image is not square, so they must never be interchanged.
-  const scaleX = calibrated && calibration ? calibration.mmPerPx * calibration.imageWidth : 1;
-  const scaleY = calibrated && calibration ? calibration.mmPerPx * calibration.imageHeight : 1;
+  // A rotated head makes projected geometry non-affine, so the millimetre path is
+  // gated on pose before any distance is reported.
+  const poseReasons = input.pose ? poseGate(input.pose).reasons : [];
+  const poseOk = poseReasons.length === 0;
+  const calibrated = scaleOk && poseOk;
 
-  if (!calibrated) {
+  // Millimetres per full normalised extent, per axis. These differ whenever the
+  // image is not square, so they must never be interchanged. The vertical axis
+  // additionally carries the foreshortening correction, because calibration is
+  // horizontal and vertical distances do not shrink with yaw the way it does.
+  const depthFactor = calibrated && input.pose ? foreshorteningFactor(input.pose) : 1;
+  const scaleX = calibrated && calibration ? calibration.mmPerPx * calibration.imageWidth : 1;
+  const scaleY =
+    calibrated && calibration ? calibration.mmPerPx * calibration.imageHeight * depthFactor : 1;
+
+  if (!scaleOk) {
     notes.push(
       "No millimetre calibration on this frame: distances, angles and the width/length ratio are withheld. Scale-free proportions are still reported.",
+    );
+  } else if (!poseOk) {
+    notes.push(
+      `Head rotation is too large for millimetre measurement (${poseReasons.join(
+        "; ",
+      )}): distances and the width/length ratio are withheld. Re-shoot facing the camera; scale-free proportions are still reported.`,
     );
   }
 
