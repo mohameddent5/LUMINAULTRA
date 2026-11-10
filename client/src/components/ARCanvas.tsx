@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { calibrateFromLandmarks, toMillimetres, type Calibration } from "@/lib/clinicalScale";
 
 const MEDIAPIPE_ESM_URL =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm";
@@ -39,10 +40,12 @@ interface DSDMeasurements {
   toothVisibilityAtRest: number;
   smileAnimationPathway: string;
   intercanineWidth: number;
+  intercommissuralWidth: number;
 }
 
 interface AnalysisResult {
   measurements: DSDMeasurements;
+  calibration: Calibration;
   overallHarmony: number;
   clinicalRecommendations: string[];
   classificationNotes: string;
@@ -210,19 +213,26 @@ export function ARCanvas() {
       smileConvexityScore: 70,
       toothVisibilityAtRest: 0,
       smileAnimationPathway: "Balanced",
-      intercanineWidth: 35,
+      intercanineWidth: 0,
+      intercommissuralWidth: 0,
     };
+
+    // Derive the metric scale from the face itself (iris diameter) so that
+    // millimetre values rest on an anatomical reference instead of an
+    // assumed pixel factor. Falls back to IPD, then face width.
+    const calibration = calibrateFromLandmarks(landmarks, w, h);
+    const toMm = (pixels: number) => toMillimetres(pixels, calibration);
 
     try {
       const glabella = landmarks[10];
       const chin = landmarks[152];
       const facialMidX = (glabella.x + chin.x) / 2;
       const centerX = 0.5;
-      measurements.facialMidlineDeviation = Math.abs((facialMidX - centerX) * 10);
+      measurements.facialMidlineDeviation = toMm(Math.abs(facialMidX - centerX) * w);
 
       const upperMidpoint = landmarks[13];
       const dentalMidX = upperMidpoint.x;
-      measurements.midlineDeviation = Math.abs((dentalMidX - facialMidX) * 10);
+      measurements.midlineDeviation = toMm(Math.abs(dentalMidX - facialMidX) * w);
 
       const leftMouthCorner = landmarks[61];
       const rightMouthCorner = landmarks[291];
@@ -271,8 +281,11 @@ export function ARCanvas() {
       const faceHeight = Math.abs(glabella.y - chin.y) * h;
       measurements.smileFullness = (mouthDisplay / (faceHeight || 1)) * 100;
 
-      const cheekWidth = (rightMouthCorner.x - leftMouthCorner.x) * w;
-      measurements.buccalCorridors = ((cheekWidth - mouthWidth) / 2) / 10;
+      // Buccal corridor is the gap between the commissure and the inner cheek.
+      // This previously reused the mouth corners as "cheek width", so the value
+      // was always zero; the cheek landmarks give a real measurement.
+      const faceWidthPx = Math.abs(landmarks[454].x - landmarks[234].x) * w;
+      measurements.buccalCorridors = Math.max(0, toMm((faceWidthPx - mouthWidth) / 2));
 
       const canineExpectedX = leftMouthCorner.x + (rightMouthCorner.x - leftMouthCorner.x) * 0.15;
       const canineActualX = landmarks[291].x;
@@ -297,14 +310,18 @@ export function ARCanvas() {
       
       const leftEdgeHeight = (leftCuspidTip.y + leftTeethMid.y) / 2;
       const rightEdgeHeight = (rightCuspidTip.y + rightTeethMid.y) / 2;
-      measurements.occlusalPlaneCant = Math.abs((leftEdgeHeight - rightEdgeHeight) * 100);
+      // Reported in degrees, as the label claims: a slope, not a normalised ratio.
+      const cantDx = Math.abs(rightCuspidTip.x - leftCuspidTip.x) * w;
+      const cantDy = Math.abs(rightEdgeHeight - leftEdgeHeight) * h;
+      measurements.occlusalPlaneCant = cantDx > 0 ? (Math.atan2(cantDy, cantDx) * 180) / Math.PI : 0;
 
       // INCISOR EDGE POSITIONS (Per-tooth vertical alignment)
       const incisorPoints = [82, 83, 84, 13, 314, 315, 316]; // Anterior teeth
       const avgTeethHeight = incisorPoints.reduce((sum, idx) => sum + landmarks[idx].y, 0) / incisorPoints.length;
       measurements.incisorEdgePositions = incisorPoints.map((idx) => {
-        const deviation = Math.abs(landmarks[idx].y - avgTeethHeight) * 100;
-        return Math.min(deviation, 50); // Cap at 50mm deviation
+        // Vertical incisal step in millimetres, capped at a plausible step.
+        const stepMm = toMm(Math.abs(landmarks[idx].y - avgTeethHeight) * h);
+        return Math.min(stepMm, 20);
       });
 
       // LIP SUPPORT ASSESSMENT (How well teeth support upper lip)
@@ -360,9 +377,11 @@ export function ARCanvas() {
       }
 
       // INTERCANINE WIDTH (Distance between canine tips - arch width indicator)
-      const leftCanine = landmarks[291]; // Approximate canine
-      const rightCanine = landmarks[61]; // Approximate canine
-      measurements.intercanineWidth = Math.abs(rightCanine.x - leftCanine.x) * w * 0.15; // Approximate in mm scale
+      // Face-mesh landmarks do not include the canine cusps, so this is the
+      // intercommissural span converted with the iris scale and labelled as a
+      // mouth-width proxy rather than pretending to be a true intercanine width.
+      measurements.intercommissuralWidth = toMm(Math.abs(rightMouthCorner.x - leftMouthCorner.x) * w);
+      measurements.intercanineWidth = measurements.intercommissuralWidth;
     } catch (e) {
       console.error("Measurement calculation error:", e);
     }
@@ -382,56 +401,62 @@ export function ARCanvas() {
     const recommendations: string[] = [];
     
     if (measurements.facialMidlineDeviation > 2) {
-      recommendations.push("⚠ Facial midline deviation >2mm - Consider orthodontic midline correction");
+      recommendations.push(`Screening flag: facial midline deviation ${measurements.facialMidlineDeviation.toFixed(1)} mm (reference <2 mm) — verify clinically before planning correction`);
     }
     if (Math.abs(measurements.midlineDeviation) > 1.5) {
-      recommendations.push("⚠ Dental-facial midline discrepancy - Plan anterior repositioning");
+      recommendations.push(`Screening flag: dental-to-facial midline discrepancy ${measurements.midlineDeviation.toFixed(1)} mm — verify clinically before any repositioning`);
     }
     if (Math.abs(measurements.centralIncisorsWLRatio - 78) > 12) {
-      recommendations.push(`⚠ Central incisor W/L ratio ${measurements.centralIncisorsWLRatio.toFixed(0)}% (ideal 78%) - Dimensional adjustment needed`);
+      recommendations.push(`Screening flag: central incisor width/length ratio ${measurements.centralIncisorsWLRatio.toFixed(0)}% (esthetic reference ~78%) — discuss proportional options with the clinician`);
     }
     if (Math.abs(measurements.goldenRatioLateral - 62) > 10) {
-      recommendations.push("⚠ Golden ratio deviation - Consider lateral incisor width adjustment");
+      recommendations.push(`Screening flag: lateral-to-central width ratio ${measurements.goldenRatioLateral.toFixed(0)}% (reference ~62%) — review proportion with the clinician`);
     }
     if (measurements.gingivalSymmetry < 80) {
-      recommendations.push(`⚠ Gingival asymmetry ${measurements.gingivalSymmetry.toFixed(0)}% - Plan periodontal contouring`);
+      recommendations.push(`Screening flag: gingival symmetry index ${measurements.gingivalSymmetry.toFixed(0)}% — confirm on clinical examination`);
     }
     if (measurements.smileArcDeviation > 40) {
-      recommendations.push("⚠ Smile arc deviation - Orthodontic or restorative correction indicated");
+      recommendations.push("Screening flag: smile arc does not follow the lower lip — verify clinically");
     }
     if (measurements.buccalCorridors > 4.5) {
-      recommendations.push("⚠ Excessive buccal corridors - Consider smile arc expansion via implants or orthodontics");
+      recommendations.push(`Screening flag: buccal corridor ${measurements.buccalCorridors.toFixed(1)} mm per side — review arch width on examination`);
     }
     if (measurements.smileFullness < 60) {
-      recommendations.push("⚠ Limited smile fullness - Evaluate VDO and posterior support");
+      recommendations.push("Screening flag: limited smile fullness — evaluate vertical dimension clinically");
     }
     if (measurements.smileFullness > 100) {
-      recommendations.push("⚠ Excessive gingival display - Consider orthognathic surgery or lip reposition");
+      recommendations.push("Screening flag: excessive gingival display — assess lip length and gingival margins clinically");
     }
     if (measurements.occlusalPlaneCant > 2) {
-      recommendations.push(`⚠ Occlusal plane cant ${measurements.occlusalPlaneCant.toFixed(1)}° - Plan orthodontic plane correction`);
+      recommendations.push(`Screening flag: occlusal plane cant ${measurements.occlusalPlaneCant.toFixed(1)}° — confirm on clinical photographs`);
     }
-    if (Math.max(...measurements.incisorEdgePositions) > 5) {
-      recommendations.push("⚠ Incisor edge step detected - Individual tooth repositioning indicated");
+    if (Math.max(...measurements.incisorEdgePositions) > 1) {
+      recommendations.push("Screening flag: anterior incisal edge step — verify individual tooth position clinically");
     }
     if (measurements.lipSupportScore < 70) {
-      recommendations.push("⚠ Limited lip support - Evaluate vertical dimension and posterior support");
+      recommendations.push("Screening flag: reduced lip support — evaluate vertical dimension and posterior support");
     }
     if (measurements.verticalDimensionRatio < 42 || measurements.verticalDimensionRatio > 48) {
-      recommendations.push(`⚠ VDO Ratio ${measurements.verticalDimensionRatio.toFixed(1)}% (ideal 43-45%) - Evaluate posterior support and VDO`);
+      recommendations.push(`Screening flag: lower-to-total facial height ${measurements.verticalDimensionRatio.toFixed(1)}% (reference 43-45%) — assess vertical dimension clinically`);
     }
     if (measurements.smileConvexityScore < 50) {
-      recommendations.push("⚠ Smile line lacks convexity - Consider orthodontic smile arc correction");
+      recommendations.push("Screening flag: smile line convexity is low — verify smile arc clinically");
     }
     if (measurements.toothVisibilityAtRest > 25) {
-      recommendations.push(`⚠ ${measurements.toothVisibilityAtRest.toFixed(0)}% tooth show at rest - Typical gummy smile presentation`);
+      recommendations.push(`Screening flag: ${measurements.toothVisibilityAtRest.toFixed(0)}% tooth display at rest — assess for gummy smile presentation`);
     }
     if (measurements.smileAnimationPathway === "Vertical-Dominant") {
-      recommendations.push("△ Smile shows primarily vertical movement - May benefit from buccal corridor expansion");
+      recommendations.push("Note: smile shows predominantly vertical movement — review with the clinician");
+    }
+
+    if (calibration.confidence < 0.7) {
+      recommendations.push(
+        `Measurement note: scale derived from ${calibration.label} (confidence ${(calibration.confidence * 100).toFixed(0)}%). Treat millimetre values as indicative and re-capture with both irises clearly visible.`,
+      );
     }
 
     if (recommendations.length === 0) {
-      recommendations.push("✓ Smile analysis within esthetic parameters - Maintenance plan recommended");
+      recommendations.push("✓ All screened parameters fall within esthetic reference ranges — no flags raised");
     }
 
     let classificationNotes = "";
@@ -466,6 +491,7 @@ export function ARCanvas() {
 
     return {
       measurements,
+      calibration,
       overallHarmony,
       clinicalRecommendations: recommendations,
       classificationNotes: classificationNotes.replace(/\s\|\s$/, ""),
@@ -922,14 +948,28 @@ ${analysis.clinicalRecommendations.map((rec, i) => `${i + 1}. ${rec}`).join("\n"
 ${generateTreatmentPlan(analysis)}
 
 ═══ CLINICAL NOTES ═══
-This analysis is based on peer-reviewed DSD protocols and validated against:
+Esthetic reference values are taken from published smile-design literature:
 • Snow's Golden Percentage (1999)
 • Ward's RED Proportion (2001)
 • Preston proportions
 • Peer-reviewed literature on smile esthetics
 
-⚠ DISCLAIMER: This tool is a clinical aid. Professional examination and
-patient assessment are essential. Use in conjunction with clinical judgment.
+This implementation has NOT been clinically validated against measured patients.
+Every value is a visualisation aid, not a clinical finding.
+
+═══ MEASUREMENT SCALE ═══
+Reference basis: ${analysis.calibration.label}
+Millimetres per pixel: ${analysis.calibration.mmPerPixel > 0 ? analysis.calibration.mmPerPixel.toFixed(4) : "n/a"}
+Scale confidence: ${(analysis.calibration.confidence * 100).toFixed(0)}%
+${analysis.calibration.note}
+
+═══ PRIVACY ═══
+All analysis runs locally in this browser. Images are never uploaded to or
+stored on a server.
+
+⚠ DISCLAIMER: Decision-support tool for education and communication. It does
+not diagnose, does not replace clinical examination, and is not a medical
+device. Every flagged parameter must be confirmed by a qualified clinician.
 
 ═══════════════════════════════════════════════════════════════
 End of Report | Lumina Ultra™ v1.0
@@ -1011,6 +1051,42 @@ End of Report | Lumina Ultra™ v1.0
     snapshots.push(snapshot);
     localStorage.setItem("capturedSnapshots", JSON.stringify(snapshots));
 
+    // The archive, dashboard, comparison and prescription screens all read
+    // "patientArchive", but nothing wrote to it, so they stayed empty forever.
+    try {
+      const archive = JSON.parse(localStorage.getItem("patientArchive") || "[]");
+      const enteredName = window.prompt(
+        "Patient name for the archive (leave blank for an anonymous record):",
+        "",
+      );
+      const patientName =
+        enteredName && enteredName.trim() ? enteredName.trim() : `Unnamed patient ${archive.length + 1}`;
+
+      archive.push({
+        id: Date.now(),
+        date: new Date().toLocaleDateString(),
+        patientName,
+        harmony: analysis?.overallHarmony ?? 0,
+        measurements: Object.fromEntries(
+          Object.entries(analysis?.measurements ?? {}).filter(
+            ([, value]) => typeof value === "number",
+          ),
+        ),
+        notes: analysis?.classificationNotes || "DSD capture",
+        clinicalNotes: analysis?.clinicalRecommendations?.join("\n") ?? "",
+        visitHistory: [
+          {
+            date: new Date().toLocaleDateString(),
+            harmony: analysis?.overallHarmony ?? 0,
+            notes: "AR scanner capture",
+          },
+        ],
+      });
+      localStorage.setItem("patientArchive", JSON.stringify(archive));
+    } catch (archiveError) {
+      console.error("Could not add patient to archive:", archiveError);
+    }
+
     // Also download
     const link = document.createElement("a");
     link.download = `lumina-dsd-${Date.now()}.png`;
@@ -1019,7 +1095,7 @@ End of Report | Lumina Ultra™ v1.0
 
     toast({
       title: "Snapshot Saved",
-      description: "AR analysis saved to Smile Simulator & downloaded.",
+      description: "Saved to the patient archive and Smile Simulator, and downloaded.",
     });
   };
 
