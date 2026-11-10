@@ -29,6 +29,8 @@ import {
   type LoadedNet,
 } from "@/lib/dentalNet";
 import type { DsdReport } from "@/lib/dsd";
+import { estimatePose } from "@/lib/poseDepth";
+import { fuseFrame, type FusedFrame } from "@/lib/fusion";
 
 const MEDIAPIPE_ESM_URL =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm";
@@ -76,6 +78,8 @@ interface AnalysisResult {
   measurementConfidence: Record<string, number>;
   /** Evidence-banded metrics from the measurement core. */
   report: DsdReport;
+  /** Fused pose/depth/keypoint/calibration verdict for this frame. */
+  fused: FusedFrame;
 }
 
 export function ARCanvas() {
@@ -548,6 +552,7 @@ export function ARCanvas() {
     // only trustworthy when the dental network accepted keypoints on this frame,
     // so measured values replace the landmark estimates and anything that cannot
     // be measured is marked unavailable instead of shown as a plausible number.
+    const pose = estimatePose(landmarks);
     const report = buildReport({
       facePoints: landmarks,
       teeth: teethRef.current,
@@ -555,6 +560,16 @@ export function ARCanvas() {
       width: w,
       height: h,
       profile: "clinician",
+      pose,
+    });
+
+    // One fused verdict for the frame: pose, depth, keypoints and calibration
+    // combined, so the overlay asks a single question instead of re-deriving
+    // flags in several places.
+    const fused = fuseFrame({
+      pose,
+      teethCount: teethRef.current?.length ?? 0,
+      calibrated: Boolean(calibration),
     });
 
     const measured = (id: string): number => metricValue(report, id) ?? Number.NaN;
@@ -604,6 +619,7 @@ export function ARCanvas() {
       clinicalRecommendations: recommendations,
       classificationNotes: classificationNotes.replace(/\s\|\s$/, ""),
       measurementConfidence,
+      fused,
       report,
     };
   }, []);
