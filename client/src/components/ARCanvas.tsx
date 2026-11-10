@@ -1120,6 +1120,9 @@ End of Report | Lumina Ultra™ v1.0
           <p className="text-xs text-muted-foreground/70 mt-2 max-w-xs">
             The first load downloads the face-analysis model. This can take a few seconds on mobile data.
           </p>
+          <p className="text-[10px] text-muted-foreground/50 mt-2 max-w-xs">
+            Runs entirely on your device — no images are uploaded.
+          </p>
         </div>
       )}
 
@@ -1310,8 +1313,8 @@ End of Report | Lumina Ultra™ v1.0
                 <span className="text-[8px] text-white/40">{analysis.measurementConfidence["Pathway"]}% conf</span>
               </div>
               <div className="flex flex-col">
-                <span>IcW: {analysis.measurements.intercanineWidth.toFixed(1)}</span>
-                <span className="text-[8px] text-white/40">{analysis.measurementConfidence["IcW"]}% conf</span>
+                <span>Mouth: {analysis.measurements.intercommissuralWidth.toFixed(1)}mm</span>
+                <span className="text-[8px] text-white/40">{analysis.calibration.mmPerPixel > 0 ? `${(analysis.calibration.confidence * 100).toFixed(0)}% scale` : "uncalibrated"}</span>
               </div>
             </div>
             {analysis.measurements.profileAnalysisNeeded && (
@@ -1328,10 +1331,22 @@ End of Report | Lumina Ultra™ v1.0
             <div className="mt-2 border-t border-white/10 pt-2">
               <p className="font-semibold text-white mb-1">Key Findings:</p>
               <ul className="space-y-1 text-white/70">
-                {analysis.clinicalRecommendations.slice(0, 2).map((rec, i) => (
-                  <li key={i} className="text-[10px]">{rec.slice(0, 55)}...</li>
+                {analysis.clinicalRecommendations.slice(0, 3).map((rec, i) => (
+                  <li key={i} className="text-[10px] leading-snug">{rec}</li>
                 ))}
               </ul>
+            </div>
+
+            <div className="mt-2 border-t border-white/10 pt-2">
+              <p className="font-semibold text-white mb-1">Measurement basis:</p>
+              <p className="text-[10px] text-white/70">
+                {analysis.calibration.mmPerPixel > 0
+                  ? `${analysis.calibration.label} · ${(analysis.calibration.confidence * 100).toFixed(0)}% scale confidence`
+                  : "No scale reference detected — millimetre values unavailable"}
+              </p>
+              <p className="text-[10px] text-amber-200/80 mt-1">
+                Decision-support only, not a diagnosis. All analysis runs on your device; images are never uploaded.
+              </p>
             </div>
           </div>
         )}
