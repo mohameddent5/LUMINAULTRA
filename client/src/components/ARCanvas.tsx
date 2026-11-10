@@ -1555,7 +1555,12 @@ End of Report | Lumina Ultra™ v1.0
                   : "bg-slate-400"
             }`}
           />
-          depth: {analysis?.fused.depthSource ?? "face-mesh"}
+          depth:{" "}
+          {depthStatus === "ready"
+            ? "onnx"
+            : depthStatus === "loading"
+              ? "loading"
+              : (analysis?.fused.depthSource ?? "face-mesh")}
         </div>
         <canvas
           ref={overlayCanvasRef}
