@@ -633,12 +633,14 @@ export function ARCanvas() {
     };
   }, []);
 
-  // The depth weights are ~17 MB. They are fetched only once the camera is
-  // already running, and only when the browser is idle, so the download can
-  // never delay first paint, compete with face tracking for the single vCPU, or
-  // break the page when the file is missing. Failure is a quiet "absent".
+  // The depth weights are ~17 MB. They are fetched once the AR engine is ready
+  // and the browser is idle, so the download can never delay first paint,
+  // compete with face tracking for the single vCPU, or break the page when the
+  // file is missing. Deliberately NOT gated on a live camera: a photo-only demo
+  // (or a machine with no webcam) must still reach the ONNX depth path.
+  // Failure is a quiet "absent".
   useEffect(() => {
-    if (cameraStatus !== "live" || depthLoadStartedRef.current) return;
+    if (!isLoaded || depthLoadStartedRef.current) return;
     depthLoadStartedRef.current = true;
     setDepthStatus("loading");
 
@@ -672,7 +674,7 @@ export function ARCanvas() {
       if (ric && cancelIdle) cancelIdle(handle);
       else window.clearTimeout(handle as number);
     };
-  }, [cameraStatus]);
+  }, [isLoaded]);
 
   // Release the wasm session when the camera unmounts, so repeated navigation
   // does not accumulate inference sessions and exhaust the 1 GB budget.
