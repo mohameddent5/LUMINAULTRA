@@ -494,12 +494,10 @@ export function analyze(input: AnalyzeInput): DsdReport {
     const a = toothPoint(tooth, "cornerA");
     const b = toothPoint(tooth, "cornerB");
     if (!zenith || !a || !b) return null;
-    const edge = toothPoint(tooth, "incisalMid");
-    // Perpendicular height, so a tilted tooth is not penalised by measuring only
-    // its vertical extent.
-    const fromZenith = distToLine(zenith, a, b);
-    const length = edge ? (fromZenith + distToLine(edge, a, b)) / 2 : fromZenith;
-    return { width: dist(a, b), length };
+    // Crown height is the perpendicular distance from the zenith to the incisal
+    // edge line. The incisal_mid keypoint lies on that line, so it cannot be
+    // averaged in: doing so would halve the measurement.
+    return { width: dist(a, b), length: distToLine(zenith, a, b) };
   };
 
   /* 10. central incisor width/length ratio */
