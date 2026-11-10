@@ -10,6 +10,7 @@
 import { analyze, type CalibrationScale, type DsdReport } from "./dsd";
 import type { Landmark } from "./dentalNet";
 import type { Calibration } from "./clinicalScale";
+import type { PoseEstimate } from "./poseDepth";
 
 export interface FacePointInput {
   x: number;
@@ -47,12 +48,15 @@ export function buildReport(args: {
   width: number;
   height: number;
   profile?: "clinician" | "patient";
+  /** Head pose; when beyond the measurement-grade limit, mm metrics are withheld. */
+  pose?: PoseEstimate | null;
 }): DsdReport {
   return analyze({
     face: { points: args.facePoints },
     teeth: args.teeth ?? null,
     calibration: toCalibrationScale(args.calibration, args.width, args.height),
     profile: args.profile ?? "clinician",
+    pose: args.pose ?? null,
   });
 }
 
