@@ -13,6 +13,7 @@ import SmileSimulator from "@/pages/smile-simulator";
 import ClinicalDashboard from "@/pages/clinical-dashboard";
 import Settings from "@/pages/settings";
 import ClinicalGuidelines from "@/pages/clinical-guidelines";
+import Validation from "@/pages/validation";
 import PatientComparison from "@/pages/patient-comparison";
 
 function Router() {
@@ -27,6 +28,7 @@ function Router() {
       <Route path="/clinical-dashboard" component={ClinicalDashboard} />
       <Route path="/settings" component={Settings} />
       <Route path="/clinical-guidelines" component={ClinicalGuidelines} />
+      <Route path="/validation" component={Validation} />
       <Route path="/patient-comparison" component={PatientComparison} />
       <Route component={NotFound} />
     </Switch>
