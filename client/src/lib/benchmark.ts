@@ -1,94 +1,59 @@
 /**
  * TypeScript port of `evaluate.py` (the uploaded landmark-benchmark reference).
  *
- * The Python script stays the authoritative implementation and is still runnable
- * as a CLI (`python3 evaluate.py gt.json pred.json [tau] [out.json]`). This port
- * exists so the same metrics can be computed in the browser: the production
- * runtime image is Node-only, so shelling out to Python from the deployed app
- * would fail. `script/check_benchmark_parity.ts` proves both implementations
- * return identical numbers on the shipped self-test fixture.
+ * The Python script remains the authoritative implementation and is still
+ * runnable as a CLI:
  *
- * Metric semantics are preserved exactly, including:
- *  - ACCEPTED-only accuracy reported separately from ALL-prediction accuracy
- *    (a gate is only useful if it improves reliability);
- *  - precision/recall/false-accept/false-reject and the no-gate baseline;
- *  - gate-probability calibration (ECE over 10 equal-width bins);
- *  - sigma calibration as radial 95% coverage (Rayleigh quantile);
- *  - refusal reasons, per-landmark and per-tooth breakdowns.
+ *     python3 evaluate.py gt.json pred.json [tau] [out.json]
  *
- * "correct" := annotated visible AND localisation error <= tau (default 2 px).
+ * This port exists so the same metrics can be computed in the browser: the
+ * production runtime image is Node-only, so shelling out to Python from the
+ * deployed app would fail. `script/check_benchmark_parity.ts` asserts that this
+ * port reproduces the Python output on the shared self-test fixture.
+ *
+ * Semantics mirrored deliberately (see the Python file):
+ *  - channels 0..31 are the four landmarks of eight FDI teeth (14..24);
+ *    32..38 are papillae between adjacent teeth; 39 is the dental midline.
+ *  - a channel absent from the predictions was refused by the decoder;
+ *    a channel absent from the annotations is unannotated and ignored.
+ *  - "correct" := annotated visible AND localisation error <= tau.
+ *  - accepted-only accuracy is reported separately from all-prediction
+ *    accuracy, because a gate only helps if it improves reliability.
  */
 
 export const FDI = [14, 13, 12, 11, 21, 22, 23, 24] as const;
-
-export type LandmarkKind =
-  | "incisal_mid"
-  | "zenith"
-  | "mesial_corner"
-  | "distal_corner"
-  | "papilla"
-  | "dental_midline";
-
-const QUADRANT_KINDS: LandmarkKind[] = [
-  "incisal_mid",
-  "zenith",
-  "mesial_corner",
-  "distal_corner",
-];
-
-/** Channel -> landmark kind (channels 0..31 tooth corners, 32..38 papillae, 39 midline). */
-export function kindOf(c: number): LandmarkKind {
-  if (c < 32) return QUADRANT_KINDS[c % 4];
-  return c < 39 ? "papilla" : "dental_midline";
-}
-
-/** Channel -> FDI tooth number, or null for papilla / midline channels. */
-export function toothOf(c: number): number | null {
-  return c < 32 ? FDI[Math.floor(c / 4)] : null;
-}
-
-/** Human-readable landmark name, e.g. "zenith_21" or "papilla_11|21". */
-export function nameOf(c: number): string {
-  if (c < 32) return `${kindOf(c)}_${FDI[Math.floor(c / 4)]}`;
-  if (c < 39) return `papilla_${FDI[c - 32]}|${FDI[c - 31]}`;
-  return "dental_midline";
-}
+export const KINDS = ["incisal_mid", "zenith", "mesial_corner", "distal_corner"] as const;
 
 export interface GtLandmark {
   x: number;
   y: number;
   visible: boolean;
 }
-
-export interface PredLandmark {
-  x: number;
-  y: number;
-  accepted: boolean;
-  gate_p?: number | null;
-  detection?: number | null;
-  sigma_px?: number | null;
-  reasons?: string[];
-}
-
-export interface BenchmarkImage {
+export interface GtImage {
   id: string;
   mm_per_px?: number | null;
   landmarks: Record<string, GtLandmark>;
 }
-
-export interface PredictionImage {
+export interface PredLandmark {
+  x: number;
+  y: number;
+  accepted?: boolean;
+  gate_p?: number | null;
+  detection?: number;
+  sigma_px?: number | null;
+  reasons?: string[];
+}
+export interface PredImage {
   id: string;
   landmarks: Record<string, PredLandmark>;
 }
-
-export interface BenchmarkGt {
-  schema: string;
-  images: BenchmarkImage[];
+export interface BenchmarkFile {
+  schema?: string;
+  images: GtImage[];
 }
-
-export interface Predictions {
-  schema: string;
-  images: PredictionImage[];
+export interface PredictionsFile {
+  schema?: string;
+  images: PredImage[];
 }
 
 export interface Stats {
@@ -100,15 +65,6 @@ export interface Stats {
   max: number | null;
 }
 
-export interface Acceptance {
-  precision: number;
-  recall_of_visible: number;
-  false_accept_rate_of_accepted: number;
-  hidden_accept_rate: number;
-  false_reject_rate_of_correct: number;
-  baseline_precision_without_gate: number;
-}
-
 export interface CalibrationBin {
   bin: string;
   n: number;
@@ -116,15 +72,13 @@ export interface CalibrationBin {
   empirical: number;
 }
 
-export interface GateCalibration {
-  ece: number;
-  bins: CalibrationBin[];
-}
-
-export interface SigmaCalibration {
-  n: number;
-  coverage_at_95: number;
-  target: number;
+export interface Acceptance {
+  precision: number;
+  recall_of_visible: number;
+  false_accept_rate_of_accepted: number;
+  hidden_accept_rate: number;
+  false_reject_rate_of_correct: number;
+  baseline_precision_without_gate: number;
 }
 
 export interface BenchmarkResult {
@@ -138,52 +92,71 @@ export interface BenchmarkResult {
   accepted_normalised_by_crown_width: Stats;
   accepted_mm: Stats | null;
   acceptance: Acceptance;
-  gate_probability_calibration?: GateCalibration;
-  sigma_calibration: SigmaCalibration | null;
+  gate_probability_calibration?: { ece: number; bins: CalibrationBin[] };
+  sigma_calibration: { n: number; coverage_at_95: number; target: number } | null;
   per_landmark_accepted: Record<string, Stats>;
   per_tooth_accepted: Record<string, Stats>;
   refusal_reasons: Record<string, number>;
 }
 
-/** Radial 95% quantile in units of per-axis sigma (Rayleigh distribution). */
-export const RAYLEIGH_95 = Math.sqrt(-2 * Math.log(0.05));
-
-/** numpy.percentile default ("linear") interpolation, matching the Python reference. */
-function percentile(sorted: number[], p: number): number {
-  const n = sorted.length;
-  if (n === 0) return Number.NaN;
-  const pos = (n - 1) * (p / 100);
-  const lo = Math.floor(pos);
-  const hi = Math.ceil(pos);
-  if (lo === hi) return sorted[lo];
-  return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+export function kindOf(c: number): string {
+  if (c < 32) return KINDS[c % 4];
+  return c < 39 ? "papilla" : "dental_midline";
 }
 
-export function stats(values: number[]): Stats {
+export function nameOf(c: number): string {
+  if (c < 32) return `${kindOf(c)}_${FDI[Math.floor(c / 4)]}`;
+  return c < 39 ? `papilla_${FDI[c - 32]}|${FDI[c - 31]}` : "dental_midline";
+}
+
+export function toothOf(c: number): number | null {
+  return c < 32 ? FDI[Math.floor(c / 4)] : null;
+}
+
+/** numpy.percentile default method ("linear") on an already-sorted array. */
+function percentileSorted(sorted: number[], p: number): number | null {
+  const n = sorted.length;
+  if (!n) return null;
+  const idx = (n - 1) * (p / 100);
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+
+function quantile(values: number[], p: number): number | null {
+  if (!values.length) return null;
+  return percentileSorted([...values].sort((a, b) => a - b), p);
+}
+
+function stats(values: number[]): Stats {
   const n = values.length;
-  if (n === 0) return { n: 0, mean: null, median: null, p90: null, p95: null, max: null };
-  const e = values.slice().sort((a, b) => a - b);
-  let sum = 0;
-  for (const v of e) sum += v;
+  if (!n) return { n: 0, mean: null, median: null, p90: null, p95: null, max: null };
+  const sorted = [...values].sort((a, b) => a - b);
+  const sum = values.reduce((acc, v) => acc + v, 0);
   return {
     n,
     mean: sum / n,
-    median: percentile(e, 50),
-    p90: percentile(e, 90),
-    p95: percentile(e, 95),
-    max: e[n - 1],
+    median: percentileSorted(sorted, 50),
+    p90: percentileSorted(sorted, 90),
+    p95: percentileSorted(sorted, 95),
+    max: sorted[n - 1],
   };
 }
 
-/** Median mesial-to-distal corner width, used to normalise error by crown width. */
-export function crownWidth(gtImage: BenchmarkImage): number {
+/** Radial 95% quantile in units of per-axis sigma (Rayleigh). */
+export const RAYLEIGH_95 = Math.sqrt(-2 * Math.log(0.05));
+
+/** Median crown width from visible mesial/distal corner pairs, else 24 px. */
+export function crownWidth(gtImage: GtImage): number {
   const widths: number[] = [];
-  for (let t = 0; t < 8; t++) {
+  for (let t = 0; t < 8; t += 1) {
     const m = gtImage.landmarks[String(t * 4 + 2)];
     const d = gtImage.landmarks[String(t * 4 + 3)];
     if (m && d && m.visible && d.visible) widths.push(Math.abs(m.x - d.x));
   }
-  return widths.length ? stats(widths).median ?? 24 : 24;
+  const med = quantile(widths, 50);
+  return med === null ? 24.0 : med;
 }
 
 interface Row {
@@ -192,35 +165,35 @@ interface Row {
   decoded: boolean;
   accepted: boolean;
   w0: number;
-  mmpp?: number | null;
-  err?: number;
-  gate_p?: number | null;
-  sigma?: number | null;
-  reasons?: string[];
+  mmpp: number | null;
+  err: number | null;
+  gate_p: number | null;
+  sigma: number | null;
+  reasons: string[];
 }
 
-const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+export function evaluate(gt: BenchmarkFile, pred: PredictionsFile, tau = 2.0): BenchmarkResult {
+  const byId = new Map<string, PredImage>();
+  for (const im of pred.images ?? []) byId.set(im.id, im);
 
-export function evaluate(gt: BenchmarkGt, pred: Predictions, tau = 2.0): BenchmarkResult {
-  const predictions = new Map(pred.images.map((im) => [im.id, im]));
   const rows: Row[] = [];
-
-  for (const g of gt.images) {
-    const p = predictions.get(g.id) ?? { id: g.id, landmarks: {} };
+  for (const g of gt.images ?? []) {
+    const p = byId.get(g.id) ?? { id: g.id, landmarks: {} };
     const w0 = crownWidth(g);
-    // Sort channel keys numerically so ordering never depends on JS object key ordering.
-    const channels = Object.keys(g.landmarks).sort((a, b) => Number(a) - Number(b));
-    for (const ch of channels) {
-      const a = g.landmarks[ch];
-      const c = Number(ch);
-      const r = p.landmarks[ch];
+    for (const [ch, a] of Object.entries(g.landmarks ?? {})) {
+      const c = Number.parseInt(ch, 10);
+      const r = p.landmarks ? p.landmarks[ch] : undefined;
       const row: Row = {
         c,
         visible: Boolean(a.visible),
-        decoded: r != null,
-        accepted: Boolean(r && r.accepted),
+        decoded: r !== undefined && r !== null,
+        accepted: r ? Boolean(r.accepted) : false,
         w0,
         mmpp: g.mm_per_px ?? null,
+        err: null,
+        gate_p: null,
+        sigma: null,
+        reasons: [],
       };
       if (r) {
         row.err = Math.hypot(r.x - a.x, r.y - a.y);
@@ -236,19 +209,18 @@ export function evaluate(gt: BenchmarkGt, pred: Predictions, tau = 2.0): Benchma
   const visDec = dec.filter((r) => r.visible);
   const acc = dec.filter((r) => r.accepted);
   const accVis = acc.filter((r) => r.visible);
-  const correct = (r: Row) => r.visible && (r.err ?? Number.POSITIVE_INFINITY) <= tau;
-  const errOf = (r: Row) => r.err ?? 0;
+  const correct = (r: Row) => r.visible && r.err !== null && r.err <= tau;
 
   const nVisible = rows.filter((r) => r.visible).length;
-  const out: BenchmarkResult = {
+  const result: BenchmarkResult = {
     tau_px: tau,
     n_annotated: rows.length,
     n_visible: nVisible,
     n_decoded: dec.length,
     n_accepted: acc.length,
-    all_predictions: stats(visDec.map(errOf)),
-    accepted_only: stats(accVis.map(errOf)),
-    accepted_normalised_by_crown_width: stats(accVis.map((r) => errOf(r) / r.w0)),
+    all_predictions: stats(visDec.map((r) => r.err as number)),
+    accepted_only: stats(accVis.map((r) => r.err as number)),
+    accepted_normalised_by_crown_width: stats(accVis.map((r) => (r.err as number) / r.w0)),
     accepted_mm: null,
     acceptance: {
       precision: 0,
@@ -264,87 +236,128 @@ export function evaluate(gt: BenchmarkGt, pred: Predictions, tau = 2.0): Benchma
     refusal_reasons: {},
   };
 
-  const mm = accVis.filter((r) => r.mmpp).map((r) => errOf(r) * (r.mmpp as number));
-  out.accepted_mm = mm.length ? stats(mm) : null;
+  const mm = accVis.filter((r) => r.mmpp).map((r) => (r.err as number) * (r.mmpp as number));
+  if (mm.length) result.accepted_mm = stats(mm);
 
   const nOk = acc.filter(correct).length;
   const hidDec = dec.filter((r) => !r.visible);
   const okDec = dec.filter(correct);
-  const denom = (n: number) => Math.max(1, n);
-
-  out.acceptance = {
-    precision: nOk / denom(acc.length),
-    recall_of_visible: nOk / denom(nVisible),
-    false_accept_rate_of_accepted: 1 - nOk / denom(acc.length),
-    hidden_accept_rate: hidDec.filter((r) => r.accepted).length / denom(hidDec.length),
-    false_reject_rate_of_correct: okDec.filter((r) => !r.accepted).length / denom(okDec.length),
-    baseline_precision_without_gate: okDec.length / denom(dec.length),
+  result.acceptance = {
+    precision: nOk / Math.max(1, acc.length),
+    recall_of_visible: nOk / Math.max(1, nVisible),
+    false_accept_rate_of_accepted: 1 - nOk / Math.max(1, acc.length),
+    hidden_accept_rate: hidDec.filter((r) => r.accepted).length / Math.max(1, hidDec.length),
+    false_reject_rate_of_correct: okDec.filter((r) => !r.accepted).length / Math.max(1, okDec.length),
+    baseline_precision_without_gate: okDec.length / Math.max(1, dec.length),
   };
 
-  // Gate-probability calibration of the visibility probability against correctness.
+  // Confidence calibration of the visibility probability against correctness.
   const gp = dec
-    .filter((r) => isNum(r.gate_p))
-    .map((r) => ({ p: r.gate_p as number, hit: correct(r) ? 1 : 0 }));
+    .filter((r) => r.gate_p !== null)
+    .map((r) => [r.gate_p as number, correct(r)] as const);
   if (gp.length) {
-    const bins: CalibrationBin[] = [];
+    const pr = gp.map((g) => g[0]);
+    const hit = gp.map((g) => (g[1] ? 1 : 0));
     let ece = 0;
-    for (let i = 0; i < 10; i++) {
+    const table: CalibrationBin[] = [];
+    for (let i = 0; i < 10; i += 1) {
       const lo = i / 10;
       const hi = (i + 1) / 10;
-      const upper = hi + (hi === 1 ? 1e-9 : 0);
-      const inBin = gp.filter((x) => x.p >= lo && x.p < upper);
-      if (!inBin.length) continue;
-      const meanP = inBin.reduce((s, x) => s + x.p, 0) / inBin.length;
-      const empirical = inBin.reduce((s, x) => s + x.hit, 0) / inBin.length;
-      ece += (inBin.length / gp.length) * Math.abs(meanP - empirical);
-      bins.push({
-        bin: `${lo.toFixed(1)}-${hi.toFixed(1)}`,
-        n: inBin.length,
-        mean_p: meanP,
-        empirical,
-      });
+      const eps = hi === 1 ? 1e-9 : 0;
+      const idx: number[] = [];
+      for (let k = 0; k < pr.length; k += 1) {
+        if (pr[k] >= lo && pr[k] < hi + eps) idx.push(k);
+      }
+      if (idx.length) {
+        const meanP = idx.reduce((s, k) => s + pr[k], 0) / idx.length;
+        const meanHit = idx.reduce((s, k) => s + hit[k], 0) / idx.length;
+        ece += (idx.length / pr.length) * Math.abs(meanP - meanHit);
+        table.push({
+          bin: `${lo.toFixed(1)}-${hi.toFixed(1)}`,
+          n: idx.length,
+          mean_p: meanP,
+          empirical: meanHit,
+        });
+      }
     }
-    out.gate_probability_calibration = { ece, bins };
+    result.gate_probability_calibration = { ece, bins: table };
   }
 
-  const sg = accVis.filter((r) => r.sigma).map((r) => ({ err: errOf(r), sigma: r.sigma as number }));
-  out.sigma_calibration = sg.length
-    ? {
-        n: sg.length,
-        coverage_at_95:
-          sg.filter((x) => x.err <= RAYLEIGH_95 * x.sigma).length / sg.length,
-        target: 0.95,
-      }
-    : null;
+  const sg = accVis
+    .filter((r) => r.sigma !== null && r.sigma !== 0)
+    .map((r) => [r.err as number, r.sigma as number] as const);
+  if (sg.length) {
+    const inside = sg.filter(([e, s]) => e <= RAYLEIGH_95 * s).length;
+    result.sigma_calibration = { n: sg.length, coverage_at_95: inside / sg.length, target: 0.95 };
+  }
 
-  const byLandmark: Record<string, number[]> = {};
+  const byLandmark = new Map<string, number[]>();
   for (const r of accVis) {
     const key = r.c >= 32 ? nameOf(r.c) : `${kindOf(r.c)}_${toothOf(r.c)}`;
-    (byLandmark[key] ??= []).push(errOf(r));
+    const list = byLandmark.get(key) ?? [];
+    list.push(r.err as number);
+    byLandmark.set(key, list);
   }
-  for (const k of Object.keys(byLandmark).sort()) out.per_landmark_accepted[k] = stats(byLandmark[k]);
+  result.per_landmark_accepted = {};
+  for (const key of [...byLandmark.keys()].sort()) {
+    result.per_landmark_accepted[key] = stats(byLandmark.get(key) as number[]);
+  }
 
-  const byTooth: Record<string, number[]> = {};
+  const byTooth = new Map<string, number[]>();
   for (const r of accVis) {
     const t = toothOf(r.c);
-    if (t !== null) (byTooth[String(t)] ??= []).push(errOf(r));
+    if (t === null) continue;
+    const key = String(t);
+    const list = byTooth.get(key) ?? [];
+    list.push(r.err as number);
+    byTooth.set(key, list);
   }
-  for (const k of Object.keys(byTooth).sort((a, b) => Number(a) - Number(b))) {
-    out.per_tooth_accepted[k] = stats(byTooth[k]);
+  result.per_tooth_accepted = {};
+  for (const key of [...byTooth.keys()].sort()) {
+    result.per_tooth_accepted[key] = stats(byTooth.get(key) as number[]);
   }
 
-  const reasons: Record<string, number> = {};
   for (const r of dec) {
     if (r.accepted) continue;
-    const list = r.reasons && r.reasons.length ? r.reasons : ["DECODED_BUT_NO_REASON_RECORDED"];
-    for (const x of list) reasons[x] = (reasons[x] ?? 0) + 1;
+    const reasons = r.reasons.length ? r.reasons : ["DECODED_BUT_NO_REASON_RECORDED"];
+    for (const reason of reasons) {
+      result.refusal_reasons[reason] = (result.refusal_reasons[reason] ?? 0) + 1;
+    }
   }
-  out.refusal_reasons = reasons;
 
-  return out;
+  return result;
 }
 
-/** Format a nullable number the way the Python reference does. */
-export function fmt(x: number | null | undefined, digits = 3): string {
-  return x === null || x === undefined || Number.isNaN(x) ? "-" : x.toFixed(digits);
+const fixed = (x: number | null, digits = 3) => (x === null ? "-" : x.toFixed(digits));
+
+/** Same markdown layout as `to_markdown` in evaluate.py. */
+export function toMarkdown(r: BenchmarkResult, title = "Landmark benchmark"): string {
+  const a = r.accepted_only;
+  const al = r.all_predictions;
+  const ac = r.acceptance;
+  const lines: string[] = [
+    `# ${title}`,
+    "",
+    `tau = ${Number.isInteger(r.tau_px) ? r.tau_px.toFixed(1) : r.tau_px} px; annotated ${r.n_annotated}, visible ${r.n_visible}, decoded ${r.n_decoded}, accepted ${r.n_accepted}.`,
+    "",
+    "| | n | mean | median | p90 | p95 | max |",
+    "|---|---|---|---|---|---|---|",
+    `| all visible predictions (px) | ${al.n} | ${fixed(al.mean)} | ${fixed(al.median)} | ${fixed(al.p90)} | ${fixed(al.p95)} | ${fixed(al.max)} |`,
+    `| accepted visible only (px) | ${a.n} | ${fixed(a.mean)} | ${fixed(a.median)} | ${fixed(a.p90)} | ${fixed(a.p95)} | ${fixed(a.max)} |`,
+    "",
+    `Acceptance precision ${fixed(ac.precision)} (without a gate: ${fixed(ac.baseline_precision_without_gate)}); recall of visible ${fixed(ac.recall_of_visible)}; hidden-accept rate ${fixed(ac.hidden_accept_rate)}; false-reject rate of correct ${fixed(ac.false_reject_rate_of_correct)}.`,
+  ];
+  if (r.gate_probability_calibration) {
+    lines.push(`Gate-probability ECE ${fixed(r.gate_probability_calibration.ece)}.`);
+  }
+  if (r.sigma_calibration) {
+    lines.push(
+      `Nominal sigma: ${fixed(r.sigma_calibration.coverage_at_95)} of accepted errors fall inside the claimed 95% circle (target 0.95).`,
+    );
+  }
+  lines.push("", `Refusal reasons: ${JSON.stringify(r.refusal_reasons)}`);
+  return `${lines.join("\n")}\n`;
 }
+
+export const SELF_TEST_DISCLAIMER =
+  "These figures come from a synthetic self-test fixture (fixed seed) that exercises every code path of the evaluator. They are NOT model accuracy and must not be reported as such. Real numbers require the ONNX weights, the paired shards and clinician annotations, none of which are included in this build.";
