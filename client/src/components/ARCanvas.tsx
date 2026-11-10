@@ -31,6 +31,7 @@ import {
 import type { DsdReport } from "@/lib/dsd";
 import { estimatePose } from "@/lib/poseDepth";
 import { fuseFrame, type FusedFrame } from "@/lib/fusion";
+import { loadDepthEstimator, type DepthEstimator } from "@/lib/depthModel";
 
 const MEDIAPIPE_ESM_URL =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm";
@@ -117,6 +118,13 @@ export function ARCanvas() {
   const teethRef = useRef<Landmark[] | null>(null);
   const netRef = useRef<LoadedNet | null>(null);
   const netBusyRef = useRef(false);
+  const depthEstimatorRef = useRef<DepthEstimator | null>(null);
+  const depthAvailableRef = useRef(false);
+  const depthBusyRef = useRef(false);
+  const depthLastSampleRef = useRef(0);
+  const depthLoadStartedRef = useRef(false);
+  const depthCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [depthStatus, setDepthStatus] = useState<"idle" | "loading" | "ready" | "absent">("idle");
 
   useEffect(() => {
     let cancelled = false;
@@ -570,6 +578,7 @@ export function ARCanvas() {
       pose,
       teethCount: teethRef.current?.length ?? 0,
       calibrated: Boolean(calibration),
+      onnxDepthAvailable: depthAvailableRef.current,
     });
 
     const measured = (id: string): number => metricValue(report, id) ?? Number.NaN;
@@ -621,6 +630,58 @@ export function ARCanvas() {
       measurementConfidence,
       fused,
       report,
+    };
+  }, []);
+
+  // The depth weights are ~17 MB. They are fetched only once the camera is
+  // already running, and only when the browser is idle, so the download can
+  // never delay first paint, compete with face tracking for the single vCPU, or
+  // break the page when the file is missing. Failure is a quiet "absent".
+  useEffect(() => {
+    if (cameraStatus !== "live" || depthLoadStartedRef.current) return;
+    depthLoadStartedRef.current = true;
+    setDepthStatus("loading");
+
+    let cancelled = false;
+    const start = () => {
+      loadDepthEstimator()
+        .then((estimator) => {
+          if (cancelled) {
+            if (estimator) void estimator.close();
+            return;
+          }
+          if (estimator) {
+            depthEstimatorRef.current = estimator;
+            depthAvailableRef.current = true;
+            setDepthStatus("ready");
+          } else {
+            setDepthStatus("absent");
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setDepthStatus("absent");
+        });
+    };
+
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+    const handle = ric ? ric(start, { timeout: 4000 }) : window.setTimeout(start, 1200);
+
+    return () => {
+      cancelled = true;
+      const cancelIdle = (window as unknown as { cancelIdleCallback?: (h: number) => void }).cancelIdleCallback;
+      if (ric && cancelIdle) cancelIdle(handle);
+      else window.clearTimeout(handle as number);
+    };
+  }, [cameraStatus]);
+
+  // Release the wasm session when the camera unmounts, so repeated navigation
+  // does not accumulate inference sessions and exhaust the 1 GB budget.
+  useEffect(() => {
+    return () => {
+      const estimator = depthEstimatorRef.current;
+      depthEstimatorRef.current = null;
+      depthAvailableRef.current = false;
+      if (estimator) void estimator.close();
     };
   }, []);
 
@@ -683,6 +744,47 @@ export function ARCanvas() {
     }
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     ctx.restore();
+
+    // Sample depth at most once every 2 s from a 256x256 offscreen copy. The
+    // model runs on one wasm thread, so sampling at camera rate would starve
+    // face tracking on a 1 vCPU deployment while adding no new information.
+    if (depthAvailableRef.current && depthEstimatorRef.current && !depthBusyRef.current) {
+      const now = performance.now();
+      if (now - depthLastSampleRef.current > 2000) {
+        depthLastSampleRef.current = now;
+        depthBusyRef.current = true;
+        try {
+          let scratch = depthCanvasRef.current;
+          if (!scratch) {
+            scratch = document.createElement("canvas");
+            scratch.width = 256;
+            scratch.height = 256;
+            depthCanvasRef.current = scratch;
+          }
+          const sctx = scratch.getContext("2d", { willReadFrequently: true });
+          const estimator = depthEstimatorRef.current;
+          if (sctx && estimator) {
+            sctx.drawImage(video, 0, 0, 256, 256);
+            const frame = sctx.getImageData(0, 0, 256, 256);
+            void estimator
+              .meanDepth(frame)
+              .then((value) => {
+                if (value !== null && Number.isFinite(value)) depthAvailableRef.current = true;
+              })
+              .catch(() => {
+                /* a bad frame must never stop the preview */
+              })
+              .finally(() => {
+                depthBusyRef.current = false;
+              });
+          } else {
+            depthBusyRef.current = false;
+          }
+        } catch {
+          depthBusyRef.current = false;
+        }
+      }
+    }
 
     overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 
