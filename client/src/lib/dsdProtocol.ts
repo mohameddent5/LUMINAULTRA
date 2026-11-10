@@ -480,7 +480,7 @@ export function classifySmileArc(
   return { type: "flat", dropMm, note: "Edges are level — a flat arc loses the natural curve." };
 }
 
-export type EdgePattern = "gull-wing" | "level" | "lateral-dominant";
+export type EdgePattern = "gull-wing" | "lateral-dominant" | "excessive-drop" | "unknown";
 
 export interface EdgeLineResult {
   pattern: EdgePattern;
@@ -501,9 +501,10 @@ export function classifyEdgeLine(
   pxPerMm: number,
 ): EdgeLineResult {
   if (!(pxPerMm > 0) || ![centralEdgeY, lateralEdgeY, canineEdgeY].every(Number.isFinite)) {
-    return { pattern: "level", lateralShortMm: NaN, note: "Landmarks unavailable; edge line not classified." };
+    return { pattern: "unknown", lateralShortMm: NaN, note: "Landmarks unavailable; edge line not classified." };
   }
-  const lateralShortMm = (lateralEdgeY - centralEdgeY) / pxPerMm;
+  // A shorter tooth's incisal edge sits higher in the image, i.e. a smaller y.
+  const lateralShortMm = (centralEdgeY - lateralEdgeY) / pxPerMm;
   if (lateralShortMm >= 0.5 && lateralShortMm <= 1.0) {
     return {
       pattern: "gull-wing",
@@ -519,7 +520,7 @@ export function classifyEdgeLine(
     };
   }
   return {
-    pattern: "level",
+    pattern: "excessive-drop",
     lateralShortMm,
     note: "Lateral drop exceeds the typical 0.5–1 mm; check the canine level too.",
   };

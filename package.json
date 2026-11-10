@@ -11,6 +11,7 @@
     "check": "tsc",
     "test:dsd": "tsx script/test-dsd.ts",
     "test:fusion": "tsx script/test-fusion.ts",
+    "test:protocol": "tsx script/test-protocol.ts",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
