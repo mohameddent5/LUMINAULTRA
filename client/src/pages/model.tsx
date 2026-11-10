@@ -25,7 +25,7 @@ const SAMPLES = [
 function StatTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-[11px] tracking-wide text-muted-foreground">{label}</div>
       <div className="mt-0.5 font-mono text-lg leading-tight text-foreground">{value}</div>
       {hint ? <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div> : null}
     </div>
