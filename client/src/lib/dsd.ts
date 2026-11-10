@@ -181,6 +181,14 @@ const LATERAL_R = 2;
 const CANINE_R = 1;
 const MIDLINE_CHANNEL = 39;
 
+/**
+ * Sag of the incisal arc that cannot be separated from zero, given roughly
+ * 0.5 mm of keypoint noise. The evidence paper classifies the arc as a
+ * three-way perception category and publishes no numeric cutoff, so this is a
+ * measurement floor, not an aesthetic norm.
+ */
+const ARC_FLAT_MM = 0.5;
+
 interface ToothChannels {
   incisalMid: number;
   zenith: number;
@@ -454,7 +462,7 @@ export function analyze(input: AnalyzeInput): DsdReport {
       // toward the canines: a consonant arc following the lower lip.
       const sag = fit.a * (span / 2) ** 2;
       const ratio = crownLength > 1e-6 ? sag / crownLength : 0;
-      const category = Math.abs(ratio) < 0.15 ? "Flat" : ratio < 0 ? "Consonant" : "Reverse";
+      const category = Math.abs(sag) <= ARC_FLAT_MM ? "Flat" : sag < 0 ? "Consonant" : "Reverse";
       push("smile_arc", ratio, {
         text: category,
         available: true,
