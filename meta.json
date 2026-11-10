@@ -1,0 +1,26 @@
+[
+ {
+  "file": "img0.png",
+  "condition": "easy",
+  "px_per_mm": 3.319,
+  "seed": 300001
+ },
+ {
+  "file": "img1.png",
+  "condition": "shadow",
+  "px_per_mm": 2.979,
+  "seed": 300013
+ },
+ {
+  "file": "img2.png",
+  "condition": "specular",
+  "px_per_mm": 3.42,
+  "seed": 300076
+ },
+ {
+  "file": "img3.png",
+  "condition": "compression",
+  "px_per_mm": 3.622,
+  "seed": 300008
+ }
+]
