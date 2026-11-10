@@ -1,0 +1,17 @@
+{
+ "generatedBy": "copy-wasm.mjs",
+ "files": {
+  "models/lumina_dental_net.onnx": {
+   "sha256": "e5db4475661908808d66665323fe1cf76b65bf9f016b025de49a0291652e3aeb",
+   "bytes": 1769000
+  },
+  "models/lumina_dental_net.int8.onnx": {
+   "sha256": "76b22456c4ac946a3d509f0b589105b0f0214b0b87376e69d206da6683cee417",
+   "bytes": 473738
+  },
+  "models/visibility_gate.json": {
+   "sha256": "359e9ec9df91eeffe12d919c2dc7eedf1e425120375dc67a3008154a8393400d",
+   "bytes": 10935
+  }
+ }
+}
