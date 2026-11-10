@@ -158,6 +158,14 @@ export default function Model() {
     if (img && net) void execute(img);
   }, [execute, net]);
 
+  // The sample image finishes decoding before the ONNX session exists, so onLoad
+  // alone would never trigger the first run. Kick one off once both are ready.
+  useEffect(() => {
+    const img = imgRef.current;
+    if (!net || !img || !img.complete || img.naturalWidth === 0) return;
+    void execute(img);
+  }, [net, execute]);
+
   const retry = () => setAttempt((n) => n + 1);
 
   return (
@@ -291,7 +299,7 @@ export default function Model() {
             <p className="mt-3 text-xs text-amber-300">Inference failed: {runError}</p>
           )}
 
-          {result && result.landmarks.length > 0 && (
+          {result && (
             <div className="mt-4 max-h-64 overflow-auto rounded-md border border-border/60">
               <table className="w-full text-left text-xs">
                 <thead className="sticky top-0 bg-card/90 backdrop-blur">
@@ -306,6 +314,13 @@ export default function Model() {
                   </tr>
                 </thead>
                 <tbody className="font-mono">
+                  {result.landmarks.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-3 py-2 text-muted-foreground">
+                        No channel passed decode (peak below 0.30, or rejected as border/ambiguous).
+                      </td>
+                    </tr>
+                  )}
                   {result.landmarks.map((lm) => (
                     <tr key={lm.channel} className="border-t border-border/40">
                       <td className="px-3 py-1">{lm.channel}</td>
