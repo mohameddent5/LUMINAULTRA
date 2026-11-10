@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import Webcam from "react-webcam";
-import { Camera, Sparkles, Ruler, SwitchCamera, Loader2, Download, Eye, Grid3X3, Home } from "lucide-react";
+import { Camera, Sparkles, Ruler, SwitchCamera, Loader2, Download, Eye, Grid3X3, Home, Upload, RotateCcw, AlertTriangle } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+
+const MEDIAPIPE_ESM_URL =
+  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm";
+const MEDIAPIPE_WASM_URL =
+  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+const FACE_MODEL_URL =
+  "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
 interface DSDMeasurements {
   facialMidlineDeviation: number;
@@ -50,6 +57,13 @@ export function ARCanvas() {
   const compositeCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [cameraFacingMode, setCameraFacingMode] = useState<"user" | "environment">("user");
+  const [engineError, setEngineError] = useState<string | null>(null);
+  const [engineAttempt, setEngineAttempt] = useState(0);
+  const [cameraError, setCameraError] = useState(false);
+  const [cameraKey, setCameraKey] = useState(0);
+  const [photoMode, setPhotoMode] = useState(false);
+  const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   
   const [showFacialGuides, setShowFacialGuides] = useState(true);
   const [showDentalGuides, setShowDentalGuides] = useState(true);
@@ -63,50 +77,91 @@ export function ARCanvas() {
   const requestRef = useRef<number | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const waitForSdk = async (timeoutMs: number) => {
+      const startedAt = Date.now();
+      while (!cancelled && Date.now() - startedAt < timeoutMs) {
+        if (window.FilesetResolver && window.FaceLandmarker) return true;
+        await new Promise<void>((resolve) => {
+          retryTimer = setTimeout(resolve, 250);
+        });
+      }
+      return Boolean(window.FilesetResolver && window.FaceLandmarker);
+    };
+
+    const createLandmarker = async (delegate: "GPU" | "CPU") => {
+      const filesetResolver = await window.FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL);
+      return window.FaceLandmarker.createFromOptions(filesetResolver, {
+        baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate },
+        outputFaceBlendshapes: false,
+        runningMode: "VIDEO",
+        numFaces: 1,
+      });
+    };
+
     const initMediaPipe = async () => {
+      setIsLoaded(false);
+      setEngineError(null);
+
       try {
-        if (!window.FilesetResolver || !window.FaceLandmarker) {
-          console.log("Loading MediaPipe...");
-          setTimeout(initMediaPipe, 500);
+        let sdkReady = await waitForSdk(12000);
+
+        // The inline CDN script can be blocked by a network or an extension;
+        // fall back to importing the very same module directly.
+        if (!sdkReady) {
+          try {
+            const sdk: any = await import(/* @vite-ignore */ MEDIAPIPE_ESM_URL);
+            window.FaceLandmarker = sdk.FaceLandmarker;
+            window.FilesetResolver = sdk.FilesetResolver;
+            window.DrawingUtils = sdk.DrawingUtils;
+            sdkReady = Boolean(window.FaceLandmarker && window.FilesetResolver);
+          } catch (importError) {
+            console.error("MediaPipe module import failed:", importError);
+          }
+        }
+
+        if (!sdkReady) {
+          throw new Error("Face-analysis engine could not be downloaded.");
+        }
+
+        let landmarker: any;
+        try {
+          landmarker = await createLandmarker("GPU");
+        } catch (gpuError) {
+          console.warn("GPU delegate unavailable, retrying with CPU:", gpuError);
+          landmarker = await createLandmarker("CPU");
+        }
+
+        if (cancelled) {
+          landmarker?.close?.();
           return;
         }
 
-        const filesetResolver = await window.FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
-        );
-
-        faceLandmarkerRef.current = await window.FaceLandmarker.createFromOptions(filesetResolver, {
-          baseOptions: {
-            modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
-            delegate: "GPU",
-          },
-          outputFaceBlendshapes: false,
-          runningMode: "VIDEO",
-          numFaces: 1,
-        });
-
+        faceLandmarkerRef.current?.close?.();
+        faceLandmarkerRef.current = landmarker;
         setIsLoaded(true);
       } catch (error) {
         console.error("Error initializing MediaPipe:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load AR engine. Please refresh.",
-          variant: "destructive",
-        });
+        if (!cancelled) {
+          setEngineError(
+            "The face-analysis engine could not load. Check your internet connection, then press Retry.",
+          );
+        }
       }
     };
 
     initMediaPipe();
 
     return () => {
-      if (faceLandmarkerRef.current) {
-        faceLandmarkerRef.current.close();
-      }
-      if (requestRef.current) {
-        cancelAnimationFrame(requestRef.current);
-      }
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      faceLandmarkerRef.current?.close?.();
+      faceLandmarkerRef.current = null;
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, []);
+  }, [engineAttempt]);
 
   // Animate harmony score
   useEffect(() => {
@@ -419,6 +474,7 @@ export function ARCanvas() {
   }, []);
 
   const draw = useCallback(() => {
+    if (photoMode) return;
     const video = webcamRef.current?.video;
     const canvas = canvasRef.current;
     const overlayCanvas = overlayCanvasRef.current;
@@ -488,7 +544,7 @@ export function ARCanvas() {
 
     overlayCtx.restore();
     requestRef.current = requestAnimationFrame(draw);
-  }, [calculateDSDMeasurements, showFacialGuides, showDentalGuides, showGingival, showMeasurements, showDeviation, cameraFacingMode]);
+  }, [calculateDSDMeasurements, showFacialGuides, showDentalGuides, showGingival, showMeasurements, showDeviation, cameraFacingMode, photoMode]);
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(draw);
@@ -660,6 +716,121 @@ export function ARCanvas() {
       ctx.fillText(`${m.label}`, x + 30, topY + 16);
       ctx.fillText(`${m.val.toFixed(0)}%`, x + 30, topY + 27);
     });
+  };
+
+  const paintOverlays = (
+    ctx: CanvasRenderingContext2D,
+    landmarks: any[],
+    w: number,
+    h: number,
+    analysisResult: AnalysisResult,
+  ) => {
+    if (showFacialGuides) drawFacialGuides(ctx, landmarks, w, h);
+    if (showDentalGuides) drawDentalGuides(ctx, landmarks, w, h);
+    if (showGingival) drawGingivalAnalysis(ctx, landmarks, w, h, analysisResult);
+    if (showMeasurements) drawMeasurementAnnotations(ctx, landmarks, w, h, analysisResult);
+    if (showDeviation) drawDeviationIndicators(ctx, landmarks, w, h, analysisResult);
+  };
+
+  const retryCamera = () => {
+    setCameraError(false);
+    setCameraKey((key) => key + 1);
+  };
+
+  const useCameraMode = async () => {
+    try {
+      await faceLandmarkerRef.current?.setOptions?.({ runningMode: "VIDEO" });
+    } catch (error) {
+      console.warn("Could not switch AR engine back to video mode:", error);
+    }
+    setPhotoMode(false);
+    retryCamera();
+  };
+
+  const analyzePhoto = async (file: File) => {
+    const landmarker = faceLandmarkerRef.current;
+    if (!landmarker) {
+      toast({
+        title: "AR engine not ready",
+        description: "Wait for the engine to finish loading, then try the photo again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsAnalyzingPhoto(true);
+    const objectUrl = URL.createObjectURL(file);
+
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error("That file could not be read as an image."));
+        image.src = objectUrl;
+      });
+
+      const canvas = canvasRef.current;
+      const overlayCanvas = overlayCanvasRef.current;
+      const ctx = canvas?.getContext("2d");
+      const overlayCtx = overlayCanvas?.getContext("2d");
+      if (!canvas || !overlayCanvas || !ctx || !overlayCtx) {
+        throw new Error("The display is not ready yet. Try again in a moment.");
+      }
+
+      const maxWidth = 1280;
+      const sourceWidth = img.naturalWidth || maxWidth;
+      const sourceHeight = img.naturalHeight || maxWidth;
+      const scale = Math.min(1, maxWidth / sourceWidth);
+
+      canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+      canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+      overlayCanvas.width = canvas.width;
+      overlayCanvas.height = canvas.height;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+      let results: any;
+      try {
+        await landmarker.setOptions?.({ runningMode: "IMAGE" });
+        results = await landmarker.detect(img);
+      } catch (detectError) {
+        console.warn("Image-mode detection failed, retrying in video mode:", detectError);
+        results = landmarker.detectForVideo(img, performance.now());
+      }
+
+      const landmarks = results?.faceLandmarks?.[0];
+      setPhotoMode(true);
+
+      if (!landmarks) {
+        toast({
+          title: "No face detected",
+          description: "Use a clear, front-facing photo where the whole face and smile are visible.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const analysisResult = calculateDSDMeasurements(landmarks, canvas.width, canvas.height);
+      setAnalysis(analysisResult);
+      paintOverlays(overlayCtx, landmarks, canvas.width, canvas.height, analysisResult);
+
+      toast({
+        title: "Photo analyzed",
+        description: "Smile measurements are drawn on your photo.",
+      });
+    } catch (error) {
+      console.error("Photo analysis failed:", error);
+      toast({
+        title: "Photo analysis failed",
+        description: error instanceof Error ? error.message : "Please try a different photo.",
+        variant: "destructive",
+      });
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+      setIsAnalyzingPhoto(false);
+    }
   };
 
   const switchCamera = () => {
