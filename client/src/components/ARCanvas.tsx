@@ -1,5 +1,15 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
-import Webcam from "react-webcam";
+import {
+  attachStreamToVideo,
+  checkCameraSupport,
+  describeCameraError,
+  detachVideo,
+  listVideoInputs,
+  openCamera,
+  stopStream,
+  watchStreamEnded,
+  type CameraFailure,
+} from "@/lib/camera";
 import { Camera, Sparkles, Ruler, SwitchCamera, Loader2, Download, Eye, Grid3X3, Home, Upload, RotateCcw, AlertTriangle } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
@@ -54,7 +64,11 @@ interface AnalysisResult {
 
 export function ARCanvas() {
   const [, navigate] = useLocation();
-  const webcamRef = useRef<Webcam>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const unwatchStreamRef = useRef<(() => void) | null>(null);
+  const cameraSessionRef = useRef(0);
+  const detectFailuresRef = useRef(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const compositeCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -62,8 +76,10 @@ export function ARCanvas() {
   const [cameraFacingMode, setCameraFacingMode] = useState<"user" | "environment">("user");
   const [engineError, setEngineError] = useState<string | null>(null);
   const [engineAttempt, setEngineAttempt] = useState(0);
-  const [cameraError, setCameraError] = useState(false);
-  const [cameraKey, setCameraKey] = useState(0);
+  const [cameraStatus, setCameraStatus] = useState<"idle" | "starting" | "live" | "failed">("idle");
+  const [cameraFailure, setCameraFailure] = useState<CameraFailure | null>(null);
+  const [videoInputs, setVideoInputs] = useState<MediaDeviceInfo[]>([]);
+  const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null);
   const [photoMode, setPhotoMode] = useState(false);
   const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -501,7 +517,7 @@ export function ARCanvas() {
 
   const draw = useCallback(() => {
     if (photoMode) return;
-    const video = webcamRef.current?.video;
+    const video = videoRef.current;
     const canvas = canvasRef.current;
     const overlayCanvas = overlayCanvasRef.current;
     const ctx = canvas?.getContext("2d");
@@ -526,7 +542,29 @@ export function ARCanvas() {
     }
 
     const startTimeMs = performance.now();
-    const results = faceLandmarkerRef.current.detectForVideo(video, startTimeMs);
+    let results: any;
+    try {
+      results = faceLandmarkerRef.current.detectForVideo(video, startTimeMs);
+      detectFailuresRef.current = 0;
+    } catch (detectError) {
+      // A lost WebGL context, or a GPU the driver refuses to use, can make
+      // detection throw on every single frame. Count consecutive failures,
+      // warn once, then stop the loop instead of spinning the CPU forever
+      // with one uncaught exception per animation frame.
+      detectFailuresRef.current += 1;
+      if (detectFailuresRef.current === 30) {
+        console.warn("AR detection repeatedly failed, stopping render loop:", detectError);
+        toast({
+          title: "AR engine stalled",
+          description:
+            "The face tracker stopped responding on this device. Reload the page or analyze a photo instead.",
+          variant: "destructive",
+        });
+      }
+      if (detectFailuresRef.current >= 30) return;
+      requestRef.current = requestAnimationFrame(draw);
+      return;
+    }
 
     // Draw webcam frame to canvas
     ctx.save();
@@ -758,10 +796,122 @@ export function ARCanvas() {
     if (showDeviation) drawDeviationIndicators(ctx, landmarks, w, h, analysisResult);
   };
 
-  const retryCamera = () => {
-    setCameraError(false);
-    setCameraKey((key) => key + 1);
-  };
+  const startCamera = useCallback(
+    async (options?: { deviceId?: string | null; facingMode?: "user" | "environment" }) => {
+      const session = cameraSessionRef.current + 1;
+      cameraSessionRef.current = session;
+
+      // Release whatever a previous attempt still holds before asking for the
+      // device again, otherwise the OS reports the camera as busy.
+      unwatchStreamRef.current?.();
+      unwatchStreamRef.current = null;
+      detachVideo(videoRef.current);
+      stopStream(streamRef.current);
+      streamRef.current = null;
+
+      const support = checkCameraSupport();
+      if (!support.supported) {
+        setCameraStatus("failed");
+        setCameraFailure(support.failure ?? null);
+        return;
+      }
+
+      setCameraStatus("starting");
+      setCameraFailure(null);
+
+      try {
+        const opened = await openCamera({
+          deviceId: options?.deviceId ?? null,
+          facingMode: options?.facingMode ?? cameraFacingMode,
+        });
+
+        // A newer attempt started while this one was still pending.
+        if (session !== cameraSessionRef.current) {
+          stopStream(opened.stream);
+          return;
+        }
+
+        streamRef.current = opened.stream;
+        if (opened.deviceId) setActiveDeviceId(opened.deviceId);
+
+        const video = videoRef.current;
+        if (!video) {
+          stopStream(opened.stream);
+          streamRef.current = null;
+          return;
+        }
+
+        await attachStreamToVideo(video, opened.stream);
+
+        if (session !== cameraSessionRef.current) {
+          stopStream(opened.stream);
+          return;
+        }
+
+        setCameraStatus("live");
+
+        // Detect the camera vanishing mid-session (USB unplugged, laptop lid
+        // closed, another app grabbing the device) instead of freezing on the
+        // last frame with no explanation.
+        unwatchStreamRef.current = watchStreamEnded(opened.stream, () => {
+          if (session !== cameraSessionRef.current) return;
+          setCameraStatus("failed");
+          setCameraFailure({
+            code: "disconnected",
+            title: "Camera disconnected",
+            message:
+              "The camera was unplugged or taken over by another app. Reconnect it, then retry.",
+            recoverable: true,
+          });
+        });
+
+        void listVideoInputs().then((inputs) => setVideoInputs(inputs));
+      } catch (error) {
+        if (session !== cameraSessionRef.current) return;
+        const described =
+          error && typeof error === "object" && "code" in error
+            ? (error as CameraFailure)
+            : describeCameraError(error);
+        console.warn("Camera start failed:", described.code, error);
+        setCameraStatus("failed");
+        setCameraFailure(described);
+      }
+    },
+    [cameraFacingMode],
+  );
+
+  // Start on mount, restart when the facing preference changes, and release the
+  // device completely when photo mode takes over or the page unmounts.
+  useEffect(() => {
+    if (photoMode) return;
+    void startCamera({ facingMode: cameraFacingMode });
+    return () => {
+      cameraSessionRef.current += 1;
+      unwatchStreamRef.current?.();
+      unwatchStreamRef.current = null;
+      stopStream(streamRef.current);
+      streamRef.current = null;
+      detachVideo(videoRef.current);
+    };
+  }, [photoMode, startCamera, cameraFacingMode]);
+
+  // Keep the device list current so hot-plugged webcams appear immediately.
+  useEffect(() => {
+    void listVideoInputs().then((inputs) => setVideoInputs(inputs));
+    const mediaDevices = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
+    if (!mediaDevices || typeof mediaDevices.addEventListener !== "function") return;
+    const handleDeviceChange = () => {
+      void listVideoInputs().then((inputs) => setVideoInputs(inputs));
+    };
+    mediaDevices.addEventListener("devicechange", handleDeviceChange);
+    return () => {
+      mediaDevices.removeEventListener("devicechange", handleDeviceChange);
+    };
+  }, []);
+
+  const retryCamera = useCallback(() => {
+    void startCamera({ deviceId: activeDeviceId, facingMode: cameraFacingMode });
+  }, [startCamera, activeDeviceId, cameraFacingMode]);
 
   const useCameraMode = async () => {
     try {
@@ -769,8 +919,9 @@ export function ARCanvas() {
     } catch (error) {
       console.warn("Could not switch AR engine back to video mode:", error);
     }
+    // The camera effect restarts the stream once photo mode is off; calling
+    // startCamera here as well would open the device twice and race for it.
     setPhotoMode(false);
-    retryCamera();
   };
 
   const analyzePhoto = async (file: File) => {
@@ -859,9 +1010,28 @@ export function ARCanvas() {
     }
   };
 
-  const switchCamera = () => {
-    setCameraFacingMode(prev => prev === "user" ? "environment" : "user");
-  };
+  const switchCamera = useCallback(() => {
+    void (async () => {
+      const inputs = await listVideoInputs();
+      setVideoInputs(inputs);
+
+      // Previously this flipped facingMode blindly. On a laptop with a single
+      // front camera that requested a required "environment" device and threw
+      // OverconstrainedError, killing the camera until a full remount.
+      if (inputs.length <= 1) {
+        toast({
+          title: "Only one camera detected",
+          description: "This machine has a single camera, so there is nothing to switch to.",
+        });
+        return;
+      }
+
+      const currentIndex = inputs.findIndex((device) => device.deviceId === activeDeviceId);
+      const next = inputs[(currentIndex + 1) % inputs.length];
+      setActiveDeviceId(next.deviceId);
+      await startCamera({ deviceId: next.deviceId, facingMode: cameraFacingMode });
+    })();
+  }, [activeDeviceId, cameraFacingMode, startCamera]);
 
   const generateReport = () => {
     if (!analysis) return;
@@ -1152,23 +1322,12 @@ End of Report | Lumina Ultra™ v1.0
 
       <div className="relative flex-1 w-full h-full">
         {!photoMode && (
-          <Webcam
-            key={cameraKey}
-            ref={webcamRef}
-            audio={false}
-            screenshotFormat="image/jpeg"
-            videoConstraints={{
-              facingMode: cameraFacingMode,
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-            }}
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
             className="absolute inset-0 w-full h-full object-cover"
-            mirrored={cameraFacingMode === "user"}
-            onUserMedia={() => setCameraError(false)}
-            onUserMediaError={(error) => {
-              console.warn("Camera unavailable:", error);
-              setCameraError(true);
-            }}
           />
         )}
         <canvas
@@ -1180,22 +1339,43 @@ End of Report | Lumina Ultra™ v1.0
           className="absolute inset-0 w-full h-full object-cover pointer-events-none"
         />
 
-        {cameraError && !photoMode && isLoaded && !engineError && (
+        {cameraStatus === "starting" && !photoMode && (
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-black/70 px-6 text-center pointer-events-none">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            <p className="text-sm text-white/70">Starting camera…</p>
+          </div>
+        )}
+
+        {/* Deliberately not gated on isLoaded/engineError: if the model CDN is
+            blocked AND there is no camera, the user must still see why. */}
+        {cameraStatus === "failed" && !photoMode && (
           <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/85 px-6 text-center gap-3">
             <Camera className="w-10 h-10 text-white/70" />
-            <p className="text-lg font-semibold text-white">Camera not available</p>
-            <p className="text-sm text-white/60 max-w-sm">
-              Allow camera access in your browser, or test the smile analysis with a photo — no camera needed.
+            <p className="text-lg font-semibold text-white">
+              {cameraFailure?.title ?? "Camera not available"}
             </p>
+            <p className="text-sm text-white/60 max-w-sm">
+              {cameraFailure?.message ??
+                "The camera could not be started. Analyze a photo instead — it uses the same analysis."}
+            </p>
+            {(cameraFailure?.code === "insecure-context" ||
+              cameraFailure?.code === "unsupported" ||
+              cameraFailure?.code === "no-device") && (
+              <p className="text-xs text-white/40 max-w-sm">
+                Photo analysis works fully without a camera.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2 justify-center pt-1">
               <Button onClick={() => photoInputRef.current?.click()}>
                 <Upload className="w-4 h-4 mr-2" />
                 Analyze a photo
               </Button>
-              <Button variant="secondary" onClick={retryCamera}>
-                <RotateCcw className="w-4 h-4 mr-2" />
-                Try camera again
-              </Button>
+              {(cameraFailure?.recoverable ?? true) && (
+                <Button variant="secondary" onClick={retryCamera}>
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Try camera again
+                </Button>
+              )}
             </div>
           </div>
         )}
