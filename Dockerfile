@@ -1,26 +1,40 @@
-# Use standard Node image (safer than alpine for compatibility)
-FROM node:18
+# syntax=docker/dockerfile:1
 
-# Set working directory
+# ---- Build stage -----------------------------------------------------------
+FROM node:24-bookworm-slim AS build
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Dev dependencies are required to build the Vite client and the server bundle
+ENV NODE_ENV=development
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
 
-# Install dependencies (including dev dependencies)
-RUN npm install
-
-# Copy all files
 COPY . .
-
-# Disable strict type checking during build (prevents crash on warnings)
-ENV CI=false
-
-# Build the app
 RUN npm run build
 
-# Expose port
+# ---- Runtime stage ---------------------------------------------------------
+FROM node:24-bookworm-slim AS runtime
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=5000
+
+# Apply current distributor security fixes for the OS packages in this image
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund \
+ && npm cache clean --force
+
+# Built client (dist/public) and bundled Express server (dist/index.cjs)
+COPY --from=build /app/dist ./dist
+
+RUN useradd --create-home --uid 10001 appuser \
+ && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 5000
 
-# Start command
-CMD ["npm", "run", "start"]
+CMD ["node", "dist/index.cjs"]
