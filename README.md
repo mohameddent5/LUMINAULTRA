@@ -2,6 +2,29 @@ this is v1.0 of the project we pushed it and now its way better we wanted to upl
 
 ---
 
+# Neural network in the web app
+
+`lumina_dental_net.onnx` (1.77 MB fp32, 474 KB int8) is executed **in the browser** with
+`onnxruntime-web` — no Python, no server-side inference, no CDN.
+
+- Weights: `client/public/models/`
+- Runtime wasm: `client/public/ort/` — self-hosted, so a venue wifi that blocks CDNs still works
+- Page: `/model` — model card, I/O contract, and a live run over the four bundled 192×128 samples
+- Inference layer: `client/src/lib/dentalNet.ts`
+
+Contract (from `export_onnx.py` metadata): input `image` float32 `[1,3,128,192]` RGB 0–1
+(the graph normalises `(x-0.5)*4` internally); outputs `seg [1,6,128,192]`,
+`ident [1,8,128,192]`, `kp [1,40,32,48]`.
+
+`decode_np` from `model.py`, the group mapping from `gate.py` and the logistic gate in
+`visibility_gate.json` are ported to TypeScript line-for-line, so the browser derives the
+same landmarks as the Python pipeline (min peak 0.30, multimodal rejection 0.60, weighted
+centroid, border rejection).
+
+**Scope:** the network was trained on synthetic renders only and has **not** been validated
+on real photographs. `/model` says so on the page; those numbers demonstrate the pipeline
+end to end, not clinical accuracy.
+
 # Benchmark tooling
 
 Two Python files were contributed to this repo: `evaluate.py` and `run_synthetic_baseline.py`.
