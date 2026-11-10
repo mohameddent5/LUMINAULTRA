@@ -25,6 +25,52 @@ centroid, border rejection).
 on real photographs. `/model` says so on the page; those numbers demonstrate the pipeline
 end to end, not clinical accuracy.
 
+# DSD measurement core
+
+The camera overlay used to compute its numbers inline: constants, ratios taken from lip
+landmarks, and a fixed confidence table. That is why two different faces could both report
+a near-ideal score. Measurement now lives in one pure module instead.
+
+- `client/src/lib/dsd.ts` — `analyze()` turns face landmarks, tooth keypoints and a
+  calibration into a `DsdReport` of 20 metrics. No DOM, no camera, no globals.
+- `client/src/lib/dsdEvidence.ts` — the evidence table: every metric carries a band range,
+  an evidence grade and a numbered reference.
+- `client/src/lib/dsdBridge.ts` — the only place where camera state becomes core input.
+
+Three rules the core enforces:
+
+1. **Unavailable is a value.** A metric this frame cannot support returns `null`, renders
+   as `n/a`, and is excluded from the score. It is never filled in with a plausible number.
+2. **Millimetres require calibration.** Without a valid `mmPerPx`, distance metrics are
+   withheld while proportions still compute.
+3. **Every millimetre carries an uncertainty**, and the harmony score is a weighted
+   average over available metrics only.
+
+`npm run test:dsd` asserts these rules (15 checks, no fixtures beyond one synthetic frame).
+
+## What the evidence paper changed
+
+`DSD_Metrics_Evidence_Paper.pdf` is the source for the band ranges. Two findings are
+load-bearing:
+
+- The golden proportion (62%) and the RED proportion are **not** found in natural
+  dentition. Both are now report-only: displayed for reference, never scored. An earlier
+  build graded faces against them, which is the largest correctness bug the paper exposed.
+- Some bands are asymmetric, so a value can be green on one side and amber on the other.
+  `classify()` keeps the green edges inclusive.
+
+## Training roadmap (not done)
+
+The dental network is trained on synthetic renders only. Closing that gap needs data this
+repository does not contain: annotated intraoral colour photographs with 40 tooth
+landmarks, plus GPU compute. Public dental datasets are largely radiographs (panoramic,
+bitewing, CBCT) — a different modality that cannot be substituted for photographs.
+
+The harness is ready for that data: `evaluate.py` scores any annotation file matching
+`lumina.benchmark/1`, and `run_synthetic_baseline.py` is the regression baseline once the
+artefacts listed below are restored. Until real annotations exist, no accuracy figure is
+claimed anywhere in this repo.
+
 # Benchmark tooling
 
 Two Python files were contributed to this repo: `evaluate.py` and `run_synthetic_baseline.py`.
