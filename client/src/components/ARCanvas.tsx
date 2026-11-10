@@ -834,13 +834,13 @@ export function ARCanvas() {
 
     const meas = analysis.measurements;
     const upperLip = landmarks[13];
-    ctx.fillText(`W/L: ${meas.centralIncisorsWLRatio.toFixed(0)}%`, upperLip.x * w, (upperLip.y + 0.05) * h);
+    ctx.fillText(`W/L: ${fmt(meas.centralIncisorsWLRatio, 0, "%")}`, upperLip.x * w, (upperLip.y + 0.05) * h);
 
     const mouthCenter = landmarks[14];
-    ctx.fillText(`Fullness: ${meas.smileFullness.toFixed(0)}%`, mouthCenter.x * w, (mouthCenter.y + 0.08) * h);
+    ctx.fillText(`Fullness: ${fmt(meas.smileFullness, 0, "%")}`, mouthCenter.x * w, (mouthCenter.y + 0.08) * h);
 
     const noseBase = landmarks[2];
-    ctx.fillText(`Symmetry: ${meas.gingivalSymmetry.toFixed(0)}%`, noseBase.x * w, (noseBase.y + 0.1) * h);
+    ctx.fillText(`Symmetry: ${fmt(meas.gingivalSymmetry, 0, "%")}`, noseBase.x * w, (noseBase.y + 0.1) * h);
   };
 
   const drawDeviationIndicators = (ctx: CanvasRenderingContext2D, landmarks: any[], w: number, h: number, analysis: AnalysisResult) => {
@@ -856,7 +856,7 @@ export function ARCanvas() {
       { label: "GR-L", val: meas.goldenRatioLateral, ideal: 62, range: 8 },
       { label: "Symm", val: meas.gingivalSymmetry, ideal: 95, range: 10 },
       { label: "SFA", val: 100 - Math.min(meas.smileArcDeviation, 50), ideal: 90, range: 20 },
-    ];
+    ].filter((m) => Number.isFinite(m.val));
 
     metrics.forEach((m, i) => {
       const x = centerX - 120 + i * 80;
@@ -1151,36 +1151,34 @@ ${analysis.overallHarmony}/100 ${
 ${analysis.classificationNotes}
 
 ═══ FACIAL ANALYSIS ═══
-• Facial Midline Deviation: ${meas.facialMidlineDeviation.toFixed(2)}mm
+• Facial Midline Deviation: ${fmt(meas.facialMidlineDeviation, 2, "mm")}
   (Clinical threshold: <2mm) ${meas.facialMidlineDeviation < 2 ? "✓" : "⚠"}
 • Inter-Pupillary Reference: Established
 
 ═══ DENTAL ANALYSIS ═══
-• Central Incisor W/L Ratio: ${meas.centralIncisorsWLRatio.toFixed(1)}%
+• Central Incisor W/L Ratio: ${fmt(meas.centralIncisorsWLRatio, 1, "%")}
   Ideal Range: 75-80% (Clinical Standard)
-  Status: ${Math.abs(meas.centralIncisorsWLRatio - 78) <= 5 ? "✓ IDEAL" : "△ DEVIATION"}
+  Status: ${Number.isFinite(meas.centralIncisorsWLRatio) ? (Math.abs(meas.centralIncisorsWLRatio - 78) <= 5 ? "✓ IDEAL" : "△ DEVIATION") : "— not measurable on this frame"}
 
-• Dental Midline Deviation: ${meas.midlineDeviation.toFixed(2)}mm from facial midline
-  Clinical threshold: <1.5mm ${meas.midlineDeviation < 1.5 ? "✓" : "⚠"}
+• Dental Midline Deviation: ${fmt(meas.midlineDeviation, 2, "mm")} from facial midline
+  Clinical threshold: <1.5mm ${Number.isFinite(meas.midlineDeviation) ? (meas.midlineDeviation < 1.5 ? "✓" : "⚠") : "—"}
 
-═══ GOLDEN PROPORTION ANALYSIS ═══
-(Peer-reviewed DSD protocol: Preston & Forster proportions)
+═══ PROPORTION ANALYSIS ═══
+(Measured from accepted tooth keypoints)
 
-• Lateral/Central Incisor Ratio: ${meas.goldenRatioLateral.toFixed(1)}%
-  Ideal: 62% (Range: 54-66% clinically acceptable)
-  Status: ${Math.abs(meas.goldenRatioLateral - 62) <= 8 ? "✓" : "△"}
+• Lateral/Central Incisor Ratio: ${fmt(meas.goldenRatioLateral, 1, "%")}
+  Reported for reference; the evidence paper finds no validated cut-off.
 
-• Canine/Lateral Incisor Ratio: ${meas.goldenRatioCanine.toFixed(1)}%
-  Ideal: 62% (Range: 54-66% clinically acceptable)
-  Status: ${Math.abs(meas.goldenRatioCanine - 62) <= 8 ? "✓" : "△"}
+• Canine/Lateral Incisor Ratio: ${fmt(meas.goldenRatioCanine, 1, "%")}
+  Reported for reference; the evidence paper finds no validated cut-off.
 
-• RED (Recurring Esthetic Dental) Proportion: ${meas.redProportion.toFixed(1)}%
-  Acceptable Range: 62-80% (Ward, 2001)
-  Status: ${meas.redProportion >= 62 && meas.redProportion <= 80 ? "✓ WITHIN RANGE" : "⚠ OUTSIDE RANGE"}
+• RED (Recurring Esthetic Dental) Proportion: not scored
+  The evidence paper reports this proportion is not found in natural
+  dentition, so it is not used to grade a case.
 
 ═══ GINGIVAL ANALYSIS ═══
-• Bilateral Symmetry Score: ${meas.gingivalSymmetry.toFixed(1)}/100
-  Clinical threshold: >85% ${meas.gingivalSymmetry > 85 ? "✓" : "⚠"}
+• Bilateral Symmetry Score: ${fmt(meas.gingivalSymmetry, 1, "/100")}
+  Clinical threshold: >85% ${Number.isFinite(meas.gingivalSymmetry) ? (meas.gingivalSymmetry > 85 ? "✓" : "⚠") : "—"}
 
 • Gingival Margin Deviations (mm):
   ${meas.gingivalMarginDev.map((d, i) => `  Tooth ${i + 1}: ${d.toFixed(2)}mm`).join("\n  ")}
