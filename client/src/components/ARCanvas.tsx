@@ -31,7 +31,7 @@ import {
 import type { DsdReport } from "@/lib/dsd";
 import { estimatePose } from "@/lib/poseDepth";
 import { fuseFrame, type FusedFrame } from "@/lib/fusion";
-import { loadDepthEstimator, type DepthEstimator } from "@/lib/depthModel";
+import { DEPTH_INPUT_SIZE, loadDepthEstimator, type DepthEstimator } from "@/lib/depthModel";
 
 const MEDIAPIPE_ESM_URL =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm";
@@ -81,6 +81,61 @@ interface AnalysisResult {
   report: DsdReport;
   /** Fused pose/depth/keypoint/calibration verdict for this frame. */
   fused: FusedFrame;
+}
+
+/**
+ * Turbo-like ramp for the relative-depth overlay. Built once into a 256-entry
+ * table so painting a 256x256 map is one lookup per pixel, not interpolation.
+ */
+const DEPTH_PALETTE: Uint8ClampedArray = (() => {
+  const stops: Array<[number, [number, number, number]]> = [
+    [0.0, [24, 32, 110]],
+    [0.25, [0, 150, 200]],
+    [0.5, [60, 200, 110]],
+    [0.75, [245, 205, 45]],
+    [1.0, [225, 55, 40]],
+  ];
+  const out = new Uint8ClampedArray(256 * 3);
+  for (let i = 0; i < 256; i += 1) {
+    const t = i / 255;
+    let a = stops[0];
+    let b = stops[stops.length - 1];
+    for (let s = 0; s < stops.length - 1; s += 1) {
+      if (t >= stops[s][0] && t <= stops[s + 1][0]) {
+        a = stops[s];
+        b = stops[s + 1];
+        break;
+      }
+    }
+    const span = b[0] - a[0] || 1;
+    const k = Math.min(1, Math.max(0, (t - a[0]) / span));
+    out[i * 3] = a[1][0] + (b[1][0] - a[1][0]) * k;
+    out[i * 3 + 1] = a[1][1] + (b[1][1] - a[1][1]) * k;
+    out[i * 3 + 2] = a[1][2] + (b[1][2] - a[1][2]) * k;
+  }
+  return out;
+})();
+
+/**
+ * Paint a normalised 0..1 depth map into a canvas as a heat map. This runs off
+ * the render loop (once per depth sample, ~2 s) so the per-pixel cost never
+ * lands on the camera path.
+ */
+function paintDepthHeat(target: HTMLCanvasElement, map: Float32Array): void {
+  const ctx = target.getContext("2d");
+  if (!ctx) return;
+  const img = ctx.createImageData(target.width, target.height);
+  const data = img.data;
+  const count = Math.min(map.length, target.width * target.height);
+  for (let i = 0; i < count; i += 1) {
+    const v = map[i];
+    const idx = Math.max(0, Math.min(255, Math.round((Number.isFinite(v) ? v : 0) * 255)));
+    data[i * 4] = DEPTH_PALETTE[idx * 3];
+    data[i * 4 + 1] = DEPTH_PALETTE[idx * 3 + 1];
+    data[i * 4 + 2] = DEPTH_PALETTE[idx * 3 + 2];
+    data[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
 }
 
 export function ARCanvas() {
