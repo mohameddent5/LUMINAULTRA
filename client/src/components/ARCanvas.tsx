@@ -1025,26 +1025,73 @@ End of Report | Lumina Ultra™ v1.0
 
   return (
     <div className="relative w-full h-[100dvh] bg-black overflow-hidden flex flex-col">
-      {!isLoaded && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) void analyzePhoto(file);
+          event.target.value = "";
+        }}
+      />
+
+      {!isLoaded && !engineError && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm px-6 text-center">
           <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
           <p className="text-muted-foreground font-medium">Loading Clinical DSD Engine...</p>
+          <p className="text-xs text-muted-foreground/70 mt-2 max-w-xs">
+            The first load downloads the face-analysis model. This can take a few seconds on mobile data.
+          </p>
+        </div>
+      )}
+
+      {engineError && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/95 px-6 text-center gap-3">
+          <AlertTriangle className="w-10 h-10 text-amber-400" />
+          <p className="text-lg font-semibold text-white">AR engine unavailable</p>
+          <p className="text-sm text-muted-foreground max-w-sm">{engineError}</p>
+          <div className="flex flex-wrap gap-2 justify-center pt-2">
+            <Button onClick={() => setEngineAttempt((attempt) => attempt + 1)}>
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Retry
+            </Button>
+            <Button variant="secondary" onClick={() => navigate("/")}>
+              Back to home
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {isAnalyzingPhoto && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/80 px-6 text-center">
+          <Loader2 className="w-9 h-9 text-primary animate-spin mb-3" />
+          <p className="text-white font-medium">Analyzing your photo...</p>
         </div>
       )}
 
       <div className="relative flex-1 w-full h-full">
-        <Webcam
-          ref={webcamRef}
-          audio={false}
-          screenshotFormat="image/jpeg"
-          videoConstraints={{
-            facingMode: cameraFacingMode,
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          }}
-          className="absolute inset-0 w-full h-full object-cover"
-          mirrored={cameraFacingMode === "user"}
-        />
+        {!photoMode && (
+          <Webcam
+            key={cameraKey}
+            ref={webcamRef}
+            audio={false}
+            screenshotFormat="image/jpeg"
+            videoConstraints={{
+              facingMode: cameraFacingMode,
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            }}
+            className="absolute inset-0 w-full h-full object-cover"
+            mirrored={cameraFacingMode === "user"}
+            onUserMedia={() => setCameraError(false)}
+            onUserMediaError={(error) => {
+              console.warn("Camera unavailable:", error);
+              setCameraError(true);
+            }}
+          />
+        )}
         <canvas
           ref={canvasRef}
           className="absolute inset-0 w-full h-full object-cover"
@@ -1053,6 +1100,26 @@ End of Report | Lumina Ultra™ v1.0
           ref={overlayCanvasRef}
           className="absolute inset-0 w-full h-full object-cover pointer-events-none"
         />
+
+        {cameraError && !photoMode && isLoaded && !engineError && (
+          <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/85 px-6 text-center gap-3">
+            <Camera className="w-10 h-10 text-white/70" />
+            <p className="text-lg font-semibold text-white">Camera not available</p>
+            <p className="text-sm text-white/60 max-w-sm">
+              Allow camera access in your browser, or test the smile analysis with a photo — no camera needed.
+            </p>
+            <div className="flex flex-wrap gap-2 justify-center pt-1">
+              <Button onClick={() => photoInputRef.current?.click()}>
+                <Upload className="w-4 h-4 mr-2" />
+                Analyze a photo
+              </Button>
+              <Button variant="secondary" onClick={retryCamera}>
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Try camera again
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Top Bar */}
         <div className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/80 to-transparent z-20 flex justify-between items-start">
@@ -1063,14 +1130,27 @@ End of Report | Lumina Ultra™ v1.0
             <p className="text-xs text-white/60">Clinical DSD Analysis</p>
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-full bg-white/10 hover:bg-white/20 text-white"
-              onClick={switchCamera}
-            >
-              <SwitchCamera className="w-5 h-5" />
-            </Button>
+            {photoMode ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-full bg-white/10 hover:bg-white/20 text-white"
+                onClick={() => void useCameraMode()}
+                title="Back to live camera"
+              >
+                <Camera className="w-5 h-5" />
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-full bg-white/10 hover:bg-white/20 text-white"
+                onClick={switchCamera}
+                title="Switch camera"
+              >
+                <SwitchCamera className="w-5 h-5" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -1196,6 +1276,15 @@ End of Report | Lumina Ultra™ v1.0
             Report
           </Button>
         </div>
+
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => photoInputRef.current?.click()}
+        >
+          <Upload className="w-4 h-4 mr-2" />
+          {photoMode ? "Analyze another photo" : "Analyze a photo (no camera needed)"}
+        </Button>
       </div>
     </div>
   );
