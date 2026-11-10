@@ -59,17 +59,17 @@ load-bearing:
 - Some bands are asymmetric, so a value can be green on one side and amber on the other.
   `classify()` keeps the green edges inclusive.
 
-## Training roadmap (not done)
+## Model scope (final)
 
-The dental network is trained on synthetic renders only. Closing that gap needs data this
-repository does not contain: annotated intraoral colour photographs with 40 tooth
-landmarks, plus GPU compute. Public dental datasets are largely radiographs (panoramic,
-bitewing, CBCT) — a different modality that cannot be substituted for photographs.
+The dental network is trained on synthetic renders only, and it ships that way. Real-photo
+training is **removed from scope, not pending**: no annotated intraoral colour photograph set
+with 40 tooth landmarks is available to this project, and public dental datasets are
+radiographs (panoramic, bitewing, CBCT) — a different modality that cannot be substituted for
+photographs. There is no plan in this repository to train on real photographs.
 
-The harness is ready for that data: `evaluate.py` scores any annotation file matching
-`lumina.benchmark/1`, and `run_synthetic_baseline.py` is the regression baseline once the
-artefacts listed below are restored. Until real annotations exist, no accuracy figure is
-claimed anywhere in this repo.
+`evaluate.py` still scores any annotation file matching `lumina.benchmark/1`, so the harness
+works the day a team supplies one. Until then, no accuracy figure is claimed anywhere in this
+repo, and `/model` states the synthetic-only scope on the page.
 
 # Benchmark tooling
 
