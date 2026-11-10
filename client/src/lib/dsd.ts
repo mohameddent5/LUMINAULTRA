@@ -269,6 +269,19 @@ export function analyze(input: AnalyzeInput): DsdReport {
 
   const toothPoint = (tooth: number, part: keyof ToothChannels): Pt | null => kp(channelsFor(tooth)[part]);
 
+  /**
+   * The network emits the two corner channels without guaranteeing which is
+   * mesial, so resolve it by proximity to a midline reference instead of
+   * assuming an order.
+   */
+  const mesialCorner = (tooth: number, reference: Pt | null): Pt | null => {
+    const a = toothPoint(tooth, "cornerA");
+    const b = toothPoint(tooth, "cornerB");
+    if (!a || !b) return null;
+    if (!reference) return a;
+    return dist(a, reference) <= dist(b, reference) ? a : b;
+  };
+
   const NO_TEETH = "no accepted tooth keypoints on this frame";
   const NO_MM = "requires millimetre calibration";
 
@@ -355,8 +368,9 @@ export function analyze(input: AnalyzeInput): DsdReport {
   /* 2. midline cant: dental midline to the inter-incisal midpoint, vs the facial axis */
   {
     const midline = kp(MIDLINE_CHANNEL);
-    const mesialR = toothPoint(CENTRAL_R, "cornerA");
-    const mesialL = toothPoint(CENTRAL_L, "cornerA");
+    const reference = midline ?? (facialMidX !== null ? { x: facialMidX, y: 0 } : null);
+    const mesialR = mesialCorner(CENTRAL_R, reference);
+    const mesialL = mesialCorner(CENTRAL_L, reference);
     const interIncisal =
       mesialR && mesialL ? { x: (mesialR.x + mesialL.x) / 2, y: (mesialR.y + mesialL.y) / 2 } : null;
     const glabella = at(10);
@@ -569,19 +583,13 @@ export function analyze(input: AnalyzeInput): DsdReport {
 
   /* 16. midline diastema: mesial corners of the two centrals */
   {
-    const a1 = toothPoint(CENTRAL_R, "cornerA");
-    const a2 = toothPoint(CENTRAL_R, "cornerB");
-    const b1 = toothPoint(CENTRAL_L, "cornerA");
-    const b2 = toothPoint(CENTRAL_L, "cornerB");
     const midline = kp(MIDLINE_CHANNEL);
     const reference = midline ?? (facialMidX !== null ? { x: facialMidX, y: 0 } : null);
-    if (!a1 || !a2 || !b1 || !b2 || !reference) push("diastema", null, { reason: NO_TEETH });
+    const mesialR = mesialCorner(CENTRAL_R, reference);
+    const mesialL = mesialCorner(CENTRAL_L, reference);
+    if (!mesialR || !mesialL || !reference) push("diastema", null, { reason: NO_TEETH });
     else if (!calibrated) needsMm("diastema");
-    else {
-      const mesialR = dist(a1, reference) <= dist(a2, reference) ? a1 : a2;
-      const mesialL = dist(b1, reference) <= dist(b2, reference) ? b1 : b2;
-      push("diastema", dist(mesialR, mesialL), { digits: 2 });
-    }
+    else push("diastema", dist(mesialR, mesialL), { digits: 2 });
   }
 
   /* 17-19. width proportions: ratios of parallel x-extents, so scale cancels */
