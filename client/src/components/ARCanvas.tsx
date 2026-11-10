@@ -1543,6 +1543,18 @@ End of Report | Lumina Ultra™ v1.0
           ref={canvasRef}
           className="absolute inset-0 w-full h-full object-cover"
         />
+        <div className="pointer-events-none absolute left-2 top-2 z-20 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[10px] font-medium text-white/90 backdrop-blur-sm">
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${
+              depthStatus === "ready"
+                ? "bg-emerald-400"
+                : depthStatus === "loading"
+                  ? "bg-amber-400"
+                  : "bg-slate-400"
+            }`}
+          />
+          depth: {analysis?.fused.depthSource ?? "face-mesh"}
+        </div>
         <canvas
           ref={overlayCanvasRef}
           className="absolute inset-0 w-full h-full object-cover pointer-events-none"
