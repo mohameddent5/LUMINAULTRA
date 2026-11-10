@@ -14,7 +14,7 @@
  * the logistic model exported by gate.py, so the browser agrees with the Python
  * reference instead of inventing its own decoding rules.
  */
-import * as ort from "onnxruntime-web";
+import * as ort from "onnxruntime-web/wasm";
 import gateRaw from "../../../shared/visibility_gate.json?raw";
 
 export const NET_W = 192;
@@ -51,6 +51,8 @@ let ortConfigured = false;
 function configureOrt(): void {
   if (ortConfigured) return;
   // Self-hosted wasm: no CDN, works offline on venue wifi.
+  // The /wasm entry point loads ort-wasm-simd-threaded.wasm (not the larger jsep
+  // variant), which is the file mirrored into client/public/ort/.
   ort.env.wasm.wasmPaths = "/ort/";
   // Single-threaded avoids the SharedArrayBuffer requirement, which would need
   // COOP/COEP headers the static host does not send.
