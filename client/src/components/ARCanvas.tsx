@@ -19,6 +19,16 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { calibrateFromLandmarks, toMillimetres, type Calibration } from "@/lib/clinicalScale";
+import { buildReport, metricValue } from "@/lib/dsdBridge";
+import {
+  decodeAndGate,
+  loadDentalNet,
+  preprocess,
+  runDentalNet,
+  type Landmark,
+  type LoadedNet,
+} from "@/lib/dentalNet";
+import type { DsdReport } from "@/lib/dsd";
 
 const MEDIAPIPE_ESM_URL =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm";
@@ -26,6 +36,10 @@ const MEDIAPIPE_WASM_URL =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
 const FACE_MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+
+/** Render a measured value, or "n/a" when the frame could not support it. */
+const fmt = (value: number, digits = 0, suffix = ""): string =>
+  Number.isFinite(value) ? `${value.toFixed(digits)}${suffix}` : "n/a";
 
 interface DSDMeasurements {
   facialMidlineDeviation: number;
@@ -60,6 +74,8 @@ interface AnalysisResult {
   clinicalRecommendations: string[];
   classificationNotes: string;
   measurementConfidence: Record<string, number>;
+  /** Evidence-banded metrics from the measurement core. */
+  report: DsdReport;
 }
 
 export function ARCanvas() {
@@ -94,6 +110,9 @@ export function ARCanvas() {
   const [displayedHarmony, setDisplayedHarmony] = useState(0);
   const faceLandmarkerRef = useRef<any>(null);
   const requestRef = useRef<number | null>(null);
+  const teethRef = useRef<Landmark[] | null>(null);
+  const netRef = useRef<LoadedNet | null>(null);
+  const netBusyRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -205,6 +224,39 @@ export function ARCanvas() {
 
     return () => clearInterval(interval);
   }, [analysis?.overallHarmony]);
+
+  // Sample tooth keypoints a few times per second. The dental network is heavier
+  // than the face mesh, so it runs on a throttle instead of every frame and the
+  // overlay reuses the most recent accepted result.
+  useEffect(() => {
+    if (cameraStatus !== "live" || photoMode) return;
+    let cancelled = false;
+
+    const tick = async () => {
+      if (cancelled || netBusyRef.current) return;
+      const video = videoRef.current;
+      if (!video || video.readyState < 2 || video.videoWidth === 0) return;
+      netBusyRef.current = true;
+      try {
+        if (!netRef.current) netRef.current = await loadDentalNet();
+        if (cancelled || !netRef.current) return;
+        const outputs = await runDentalNet(netRef.current, preprocess(video));
+        const decoded = decodeAndGate(outputs);
+        teethRef.current = decoded.landmarks.filter((l) => l.accepted);
+      } catch {
+        teethRef.current = null;
+      } finally {
+        netBusyRef.current = false;
+      }
+    };
+
+    const timer = setInterval(tick, 1000);
+    void tick();
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [cameraStatus, photoMode]);
 
   const calculateDSDMeasurements = useCallback((landmarks: any[], w: number, h: number): AnalysisResult => {
     const measurements: DSDMeasurements = {
@@ -492,26 +544,67 @@ export function ARCanvas() {
       classificationNotes = "Balanced Smile Characteristics";
     }
 
-    // Calculate confidence scores based on landmark visibility
+    // Everything above derives from face-mesh landmarks. Tooth-level values are
+    // only trustworthy when the dental network accepted keypoints on this frame,
+    // so measured values replace the landmark estimates and anything that cannot
+    // be measured is marked unavailable instead of shown as a plausible number.
+    const report = buildReport({
+      facePoints: landmarks,
+      teeth: teethRef.current,
+      calibration,
+      width: w,
+      height: h,
+      profile: "clinician",
+    });
+
+    const measured = (id: string): number => metricValue(report, id) ?? Number.NaN;
+
+    measurements.centralIncisorsWLRatio = measured("central_wl_ratio");
+    measurements.goldenRatioLateral = measured("lateral_central_width_ratio");
+    measurements.goldenRatioCanine = measured("canine_lateral_width_ratio");
+    measurements.redProportion = Number.NaN; // not found in natural dentition; report-only
+    measurements.smileArcDeviation = measured("smile_arc");
+    measurements.gingivalSymmetry = measured("gingival_margin_diff");
+    measurements.midlineDeviation = measured("dental_midline_shift");
+    measurements.occlusalPlaneCant = measured("occlusal_plane_cant");
+    measurements.toothVisibilityAtRest = measured("incisor_display_rest");
+    measurements.buccalCorridors = measured("buccal_corridor");
+    measurements.smileFullness = Number.NaN;
+    measurements.lipSupportScore = Number.NaN;
+    measurements.verticalDimensionRatio = Number.NaN;
+    measurements.smileConvexityScore = Number.NaN;
+    measurements.caninePositionDev = Number.NaN;
+    measurements.intercanineWidth = Number.NaN;
+    measurements.intercommissuralWidth = Number.NaN;
+    measurements.gingivalMarginDev = [];
+    measurements.toothTilt = [];
+    measurements.incisorEdgePositions = [];
+    measurements.smileAnimationPathway = "Unmeasured";
+
+    // Confidence follows the calibration basis and whether tooth keypoints exist,
+    // rather than a fixed table of reassuring numbers.
+    const basis = Math.round(Math.min(100, Math.max(0, calibration.confidence * 100)));
+    const teethSeen = (teethRef.current?.length ?? 0) > 0;
     const measurementConfidence: Record<string, number> = {
-      "W/L": 92,
-      "GR-L": 88,
-      "Sym": 85,
-      "Cant": 87,
-      "VDO": 90,
-      "Conv": 83,
-      "RestTooth": 86,
-      "Pathway": 89,
-      "IcW": 91,
+      "W/L": teethSeen ? basis : 0,
+      "GR-L": teethSeen ? basis : 0,
+      "Sym": teethSeen ? basis : 0,
+      "Cant": teethSeen ? basis : 0,
+      "VDO": 0,
+      "Conv": 0,
+      "RestTooth": teethSeen ? basis : 0,
+      "Pathway": 0,
+      "IcW": 0,
     };
 
     return {
       measurements,
       calibration,
-      overallHarmony,
+      overallHarmony: report.score ?? 0,
       clinicalRecommendations: recommendations,
       classificationNotes: classificationNotes.replace(/\s\|\s$/, ""),
       measurementConfidence,
+      report,
     };
   }, []);
 
