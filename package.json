@@ -120,7 +120,7 @@
     "path-to-regexp": "0.1.13",
     "picomatch@^2": "2.3.2",
     "picomatch@^3": "3.0.2",
-    "picomatch@^4": "4.0.4",
+    "picomatch@^4": "4.0.7",
     "rollup@^4": "4.59.0",
     "source-map-js": "1.2.2"
   }
