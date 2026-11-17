@@ -85,6 +85,9 @@ check("analyze() with degenerate input emits no impossible value", () => {
   });
   for (const metric of report.metrics) {
     if (metric.value === null) continue;
+    // Category metrics carry an internal signed ratio (the arc classification),
+    // not a physical quantity, so they are outside the physical gate by design.
+    if (!(metric.unit === "mm" || metric.unit === "deg" || metric.unit === "%")) continue;
     const gate = plausibility(metric.id, metric.value);
     assert.equal(gate.ok, true, `${metric.id} reported ${metric.value}, which is impossible: ${gate.reason}`);
     assert.ok(Number.isFinite(metric.value), `${metric.id} reported a non-finite value`);

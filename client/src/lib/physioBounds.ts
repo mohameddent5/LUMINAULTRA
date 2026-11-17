@@ -84,10 +84,11 @@ export const PHYSIO_BOUNDS: Readonly<Record<string, PhysioBound>> = {
     rationale: "maxillary incisor display at rest is 0-14 mm across the adult range including full-crown display",
   },
   smile_arc: {
-    min: 0,
+    min: -2,
     max: 2,
     unit: "category",
-    rationale: "sag/crown-length ratio beyond 2 means the fitted arc is not a smile line",
+    rationale:
+      "the fitted arc ratio is signed: negative follows the lower lip (consonant), positive is a reverse arc, and beyond +/-2 the fit is not a smile line at all",
   },
   buccal_corridor: {
     min: 0,

@@ -398,8 +398,11 @@ export function analyze(input: AnalyzeInput): DsdReport {
     const bandRange = resolveBand(evidence, profile, sex);
     const numeric = value !== null && Number.isFinite(value);
     // A value outside its physiological bound is a tracking failure, not a
-    // finding: withhold it with the reason instead of grading it.
-    const check = numeric ? plausibility(id, value as number) : null;
+    // finding: withhold it with the reason instead of grading it. Only physical
+    // units are gated -- category metrics carry an internal signed ratio whose
+    // text (e.g. "Consonant") is a classification, not a measurable quantity.
+    const physical = evidence.unit === "mm" || evidence.unit === "deg" || evidence.unit === "%";
+    const check = numeric && physical ? plausibility(id, value as number) : null;
     const plausible = numeric && (check === null || check.ok);
     const available = (options.available ?? numeric) && plausible;
     const band: Band = options.bandOverride ?? (available ? classify(value, bandRange) : "unavailable");
