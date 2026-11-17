@@ -20,6 +20,7 @@ import { toast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { calibrateFromLandmarks, toMillimetres, type Calibration } from "@/lib/clinicalScale";
 import { buildReport, metricValue } from "@/lib/dsdBridge";
+import { MetricTracker, qualityLabel } from "@/lib/plausibility";
 import {
   decodeAndGate,
   loadDentalNet,
@@ -145,6 +146,9 @@ export function ARCanvas() {
   const unwatchStreamRef = useRef<(() => void) | null>(null);
   const cameraSessionRef = useRef(0);
   const detectFailuresRef = useRef(0);
+  // One consensus window per mounted scanner: a spike on a single frame is
+  // filtered out before it can reach the clinician-facing report or the score.
+  const trackerRef = useRef(new MetricTracker({ window: 24, minSamples: 5 }));
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const compositeCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -626,6 +630,7 @@ export function ARCanvas() {
       height: h,
       profile: "clinician",
       pose,
+      tracker: trackerRef.current,
     });
 
     // One fused verdict for the frame: pose, depth, keypoints and calibration
@@ -1834,6 +1839,14 @@ End of Report | Lumina Ultra™ v1.0
                 {analysis.calibration.mmPerPixel > 0
                   ? `${analysis.calibration.label} · ${(analysis.calibration.confidence * 100).toFixed(0)}% scale confidence`
                   : "No scale reference detected — millimetre values unavailable"}
+              </p>
+              <p className="text-[10px] text-white/70 mt-1">
+                Data quality: {qualityLabel(analysis.report.quality)}
+                {analysis.report.quality?.gate === "insufficient"
+                  ? " — score withheld until enough metrics are measurable"
+                  : analysis.report.quality?.gate === "limited"
+                    ? " — provisional, hold steady to settle"
+                    : ""}
               </p>
               <p className="text-[10px] text-amber-200/80 mt-1">
                 Decision-support only, not a diagnosis. All analysis runs on your device; images are never uploaded.

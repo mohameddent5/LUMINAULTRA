@@ -13,6 +13,7 @@
     "test:fusion": "tsx script/test-fusion.ts",
     "test:protocol": "tsx script/test-protocol.ts",
     "test:care": "tsx script/test-care.ts",
+    "test:plausibility": "tsx script/test-plausibility.ts",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
