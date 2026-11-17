@@ -24,7 +24,7 @@ fs.mkdirSync(OUT, { recursive: true });
   const page = await context.newPage();
   const wait = (ms) => page.waitForTimeout(ms);
 
-  await page.goto(URL, { waitUntil: 'network-idle', timeout: 45000 });
+  await page.goto(URL, { waitUntil: 'networkidle', timeout: 45000 });
   await wait(1200);
 
   await page.getByRole('button', { name: 'Load example case' }).click();
