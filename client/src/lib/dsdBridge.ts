@@ -8,6 +8,7 @@
  * measured values instead of local guesses.
  */
 import { analyze, type CalibrationScale, type DsdReport } from "./dsd";
+import { MetricTracker } from "./plausibility";
 import type { Landmark } from "./dentalNet";
 import type { Calibration } from "./clinicalScale";
 import type { PoseEstimate } from "./poseDepth";
@@ -50,14 +51,23 @@ export function buildReport(args: {
   profile?: "clinician" | "patient";
   /** Head pose; when beyond the measurement-grade limit, mm metrics are withheld. */
   pose?: PoseEstimate | null;
+  /**
+   * Session consensus. When supplied, the raw frame is recorded and the returned
+   * report carries the stabilized values, so a single bad frame cannot move the
+   * numbers the clinician reads.
+   */
+  tracker?: MetricTracker;
 }): DsdReport {
-  return analyze({
+  const raw = analyze({
     face: { points: args.facePoints },
     teeth: args.teeth ?? null,
     calibration: toCalibrationScale(args.calibration, args.width, args.height),
     profile: args.profile ?? "clinician",
     pose: args.pose ?? null,
   });
+  if (!args.tracker) return raw;
+  args.tracker.add(raw);
+  return args.tracker.summarise(raw);
 }
 
 /** Look up a metric value, returning null when it could not be measured. */
