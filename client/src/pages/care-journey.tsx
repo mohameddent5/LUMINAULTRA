@@ -598,11 +598,12 @@ export default function CareJourney() {
                             </div>
                             {selectedProvider === prov.id && (
                               <div className="flex flex-wrap gap-2">
-                                {slotsFor(prov).map((slot) => (
+                                {slotsFor(prov).map((slot, i) => (
                                   <Button
                                     key={slot}
                                     size="sm"
                                     variant="secondary"
+                                    aria-label={`Book ${prov.id} slot ${i + 1}`}
                                     onClick={() => {
                                       apply(bookAppointment(active, prov, slot));
                                       setSelectedProvider(null);
