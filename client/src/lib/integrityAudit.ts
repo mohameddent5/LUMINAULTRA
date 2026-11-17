@@ -16,6 +16,7 @@
  *   - every bounded metric accepts its own minimum, maximum and mid-range value,
  *     and refuses one step outside either end (boundary inclusivity);
  *   - a refusal is a verdict, never a substituted number (no silent clamping);
+ *   - NaN and ±Infinity are refused before any bound comparison is attempted;
  *   - one extreme frame inside a settled window cannot move the reported value;
  *   - once that frame leaves the window the value returns to baseline;
  *   - a capture with too few measurable metrics produces no composite score;
@@ -118,6 +119,10 @@ function boundsTable(): AuditCheck {
     const bound = PHYSIO_BOUNDS[id];
     if (!bound) {
       problems.push(`${id} is listed but has no bound`);
+      continue;
+    }
+    if (!Number.isFinite(bound.min) || !Number.isFinite(bound.max)) {
+      problems.push(`${id} has a non-finite bound`);
       continue;
     }
     if (!(bound.min < bound.max)) problems.push(`${id} has an inverted range`);
@@ -303,6 +308,33 @@ function gradedCoverage(): AuditCheck {
   };
 }
 
+function nonFiniteInput(): AuditCheck {
+  const probes: Array<[string, number]> = [
+    ["NaN", Number.NaN],
+    ["+Infinity", Number.POSITIVE_INFINITY],
+    ["-Infinity", Number.NEGATIVE_INFINITY],
+  ];
+  const accepted = probes.filter(([, value]) => plausibility("central_wl_ratio", value).ok);
+  const unexplained = probes.filter(([, value]) => {
+    const verdict = plausibility("central_wl_ratio", value);
+    return !verdict.ok && (verdict.reason ?? "").trim().length === 0;
+  });
+  const ok = accepted.length === 0 && unexplained.length === 0;
+
+  return {
+    id: "non-finite-input",
+    title: "A non-finite reading is refused, not compared",
+    status: ok ? "pass" : "fail",
+    measured:
+      accepted.length === 0
+        ? `${probes.length} non-finite inputs (NaN, +Infinity, -Infinity) refused, each with a stated reason`
+        : `accepted as a measurement: ${accepted.map(([name]) => name).join(", ")}`,
+    detail: ok
+      ? "NaN is false against every comparison, so a plain range test would let it through and the report would show a grade built on nothing. The gate rejects non-finite values before it looks at the bounds, and says why."
+      : "A non-finite value reached the bound comparison, where it can pass as a valid reading or produce a meaningless grade.",
+  };
+}
+
 /* --------------------------------------------------------------- entry point */
 
 function safely(
@@ -332,6 +364,7 @@ export function runIntegrityAudit(): IntegrityAudit {
     safely("bounds-table", "Every bound is complete and explainable", boundsTable),
     safely("boundary-sweep", "Bounds are inclusive at the edge and hard outside it", boundarySweep),
     safely("no-clamping", "A refusal is a verdict, never a corrected number", verdictOnly),
+    safely("non-finite-input", "A non-finite reading is refused, not compared", nonFiniteInput),
     safely("spike-resistance", "One bad frame cannot move a settled reading", spikeResistance),
     safely("window-recovery", "A transient fault does not stick", windowRecovery),
     safely("score-withheld", "No composite score from a thin capture", scoreWithheld),
