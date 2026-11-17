@@ -137,3 +137,97 @@ from the client bundle. The running application is not exposed to either advisor
 Only an upstream release can close this. Forcing an older major (3.0.2 is not
 flagged) is semver-incompatible: npm marks it `invalid`, `package.json` desyncs
 from `package-lock.json`, and `npm ci` fails in the Docker build.
+
+---
+
+## Independent re-verification (second pass, 2026-11-17)
+
+Everything below was re-run from scratch rather than carried forward from the
+first audit. Commands are reproduced so the result can be checked independently.
+
+### 1. Is a patched picomatch available? (re-asked)
+
+```bash
+npm view picomatch version            # 4.0.7
+npm view picomatch versions --json    # last entry: "4.0.7"
+curl -s https://api.osv.dev/v1/vulns/GHSA-fc5q-39xc-vjpf
+#   "Picomatch through 4.0.7 contains a regular expression denial of service..."
+#   severity HIGH, CWE-1333, github_reviewed: true
+```
+
+The newest release on the registry is still the advisory's `last_affected`, and
+the OSV record still carries no `fixed_versions`. No dependency change in this
+stack can clear the finding, so none was made. The earlier `overrides` attempt
+is reverted: `git diff 951a1cb~1..HEAD -- package.json` is empty, so the manifest
+and lockfile are consistent and `npm ci` still resolves.
+
+### 2. Is the package actually in the runtime install?
+
+`npm ls --omit=dev` is an indirect test. This pass reproduced the Dockerfile's
+runtime stage directly, in a clean directory:
+
+```bash
+mkdir -p /tmp/prodiso && cp package.json package-lock.json /tmp/prodiso/
+cd /tmp/prodiso && npm ci --omit=dev --no-audit --no-fund
+#   added 278 packages in 9s    (exit 0)
+
+npm ls picomatch --all          # -> (empty)
+npm ls esbuild --all            # -> (empty)
+```
+
+Every development tool is absent from that tree — `vite`, `typescript`, `tsx`,
+`drizzle-kit`, `esbuild` and `picomatch` all report `absent` — and no installed
+package's `package.json` references `picomatch`. This is the same install the
+`runtime` stage performs before dropping to uid 10001.
+
+**Limitation:** no Docker CLI is available in this environment, so the final
+image could not be scanned directly. The reproduction above is the dependency
+tree the image is assembled from; the builder's own final-image scan accepted
+the image deployed as revision 9.
+
+### 3. Does the deployed revision match the repository?
+
+```bash
+git diff --stat 6b3bbeb..HEAD                                  # SECURITY.md | 29 +
+git diff --quiet 6b3bbeb..HEAD -- client/ server/ shared/ script/   # identical
+git diff --quiet 6b3bbeb..HEAD -- package.json                      # identical
+```
+
+`6b3bbeb` is the commit the live deployment (revision 9) was built from. Every
+executable source file and the dependency manifest are identical to HEAD; the
+only difference is this document. **No redeployment is required for the deployed
+application to match the repository.**
+
+### 4. Gate hardening added in this pass
+
+Two validation conditions were missing and are now enforced:
+
+- `boundsTable` rejects a bound whose `min` or `max` is not finite, before it
+  compares them.
+- A new audit property, `non-finite-input`, proves that `NaN`, `+Infinity` and
+  `-Infinity` are refused *before* the bound comparison. This matters because
+  `NaN < min` and `NaN > max` are both false: a plain range test would report a
+  failed computation as acceptable.
+
+`script/test-integrity-audit.ts` now also pins, for all 20 bounds: the exact
+minimum and maximum are accepted, the first representable step outside either end
+is refused, no refusal ever carries a substitute number, and verdicts are
+identical across repeated runs. Missing (`null`, `undefined`), mistyped (string,
+object, array, boolean) and extreme (`Number.MAX_VALUE`, `1e21`,
+`Number.MIN_VALUE`) inputs are asserted refused rather than coerced.
+
+### 5. Findings reviewed and cleared (no change made)
+
+- **Signed vs unsigned bounds.** Nine bounds declare `min: 0`. Each matching
+  computation in `client/src/lib/dsd.ts` wraps its result in `Math.abs(...)`
+  (lines 442, 460, 480, 491, 613, 622, 631, 644, 657), so a negative magnitude
+  cannot reach the gate and the zero floor cannot cause a false refusal.
+  `gingival_display` is genuinely signed and is bounded `-8..12`, which is
+  correct. Percentage ratios are multiplied by 100 before gating, matching their
+  `%` bounds.
+- **`incisor_display_rest` with the lip covering the incisors at rest.** The
+  computed value can be negative in that state and the gate refuses it, stating
+  that the keypoints were unstable. The refusal is right — the quantity is
+  display, non-negative by definition — but the reason is imprecise for this one
+  case. No bound was changed: the module's documented convention is to refuse
+  rather than invent a value, and no published reference justified widening it.
