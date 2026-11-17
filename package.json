@@ -122,9 +122,6 @@
     "picomatch@^3": "3.0.2",
     "picomatch@^4": "4.0.7",
     "rollup@^4": "4.59.0",
-    "source-map-js": "1.2.2",
-    "@esbuild-kit/core-utils": {
-      "esbuild": "^0.25.0"
-    }
+    "source-map-js": "1.2.2"
   }
 }
