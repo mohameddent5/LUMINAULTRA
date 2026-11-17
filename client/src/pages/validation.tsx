@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { AlertTriangle, ArrowLeft, CheckCircle2, Download, FileJson, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, Download, FileJson, ShieldCheck, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   evaluate,
@@ -12,10 +12,18 @@ import {
 } from "@/lib/benchmark";
 import { PHYSIO_BOUNDS } from "@/lib/physioBounds";
 import { MIN_METRICS_FOR_SCORE } from "@/lib/plausibility";
+import { runIntegrityAudit } from "@/lib/integrityAudit";
 import gtRaw from "../../../shared/benchmark-selftest.gt.json?raw";
 import predRaw from "../../../shared/benchmark-selftest.pred.json?raw";
 
 const TAU = 2.0;
+
+const pillClass = (status: "pass" | "warn" | "fail") =>
+  status === "pass"
+    ? "bg-emerald-500/15 text-emerald-300"
+    : status === "warn"
+      ? "bg-amber-500/15 text-amber-300"
+      : "bg-red-500/15 text-red-300";
 
 const fmt = (x: number | null | undefined, digits = 3) =>
   x === null || x === undefined ? "–" : x.toFixed(digits);
@@ -75,6 +83,10 @@ export default function Validation() {
   const gtRef = useRef<BenchmarkFile | null>(null);
   const predRef = useRef<PredictionsFile | null>(null);
 
+  // Measured on every page load by running the shipped gate. Deliberately not
+  // cached or stored: a stale "all good" badge would defeat the purpose.
+  const audit = useMemo(() => runIntegrityAudit(), []);
+
   const result = custom?.result ?? fixtureResult;
   const error = custom ? null : fixtureError;
 
@@ -119,6 +131,16 @@ export default function Validation() {
     URL.revokeObjectURL(url);
   };
 
+  const downloadAudit = () => {
+    const blob = new Blob([JSON.stringify(audit, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "integrity-audit.json";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   const perLandmark = result
     ? Object.entries(result.per_landmark_accepted).sort(
         (a, b) => (b[1].mean ?? 0) - (a[1].mean ?? 0),
@@ -155,6 +177,73 @@ export default function Validation() {
             The self-test fixture could not be evaluated: {error}
           </div>
         ) : null}
+
+        {/* Gate self-audit — always rendered, independent of any upload */}
+        <Card
+          title="Gate self-audit — executed in this browser"
+          subtitle="Every property below was just measured by running the shipped gate during this page load. Nothing here is a stored claim or a figure typed into the page."
+        >
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <span
+              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${pillClass(
+                audit.verdict === "hold" ? "pass" : audit.verdict === "attention" ? "warn" : "fail",
+              )}`}
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              {audit.passed}/{audit.total} properties hold
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {audit.boundedMetrics} bounded metrics exercised · computed{" "}
+              {new Date(audit.generatedAt).toLocaleTimeString()}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={downloadAudit}
+              className="text-cyan-300 hover:bg-white/10 ml-auto"
+            >
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+              Download audit (.json)
+            </Button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs uppercase text-muted-foreground border-b border-white/10">
+                  <th className="text-left py-2 pr-3 font-medium">Property</th>
+                  <th className="text-left py-2 px-2 font-medium">Verdict</th>
+                  <th className="text-left py-2 px-2 font-medium">What was measured</th>
+                </tr>
+              </thead>
+              <tbody>
+                {audit.checks.map((c) => (
+                  <tr key={c.id} className="border-b border-white/5 align-top">
+                    <td className="py-2 pr-3">
+                      <div className="font-medium text-foreground">{c.title}</div>
+                      <div className="text-xs text-muted-foreground">{c.detail}</div>
+                    </td>
+                    <td className="py-2 px-2 whitespace-nowrap">
+                      <span
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${pillClass(
+                          c.status,
+                        )}`}
+                      >
+                        {c.status}
+                      </span>
+                    </td>
+                    <td className="py-2 px-2 text-xs text-muted-foreground font-mono">{c.measured}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <p className="text-xs text-muted-foreground mt-3">
+            Reloading this page re-runs the audit from scratch. A property that stops holding appears here
+            in red — it cannot be averaged away by the rest of the report.
+          </p>
+        </Card>
 
         {result ? (
           <>
