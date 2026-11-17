@@ -44,6 +44,18 @@ input. The `Dockerfile` is two-stage and the runtime stage installs with
 client bundle likewise does not include it. Exploitation would require an attacker
 to control the build's glob patterns.
 
+**Upgrade avenues tested and closed** (re-checked after the first audit):
+
+- `npm view picomatch versions` — the newest published 4.x is `4.0.7`; no `4.0.8`
+  or later exists, so there is no patched release to move to.
+- `vite@latest` is `8.3.8` (this project is on `7.3.8`) and **still declares
+  `"picomatch": "^4.0.7"`**, so even a major build-tool upgrade keeps the affected
+  package.
+- `tinyglobby@latest` and `fdir@latest` also require picomatch `^4`, so the
+  transitive path cannot be routed around.
+
+There is therefore no dependency change in this stack that removes the advisory.
+
 **What would close it:** a picomatch release above `4.0.7`. When one exists, bump
 the `picomatch@^4` override in `package.json`, run `npm install`, and re-run the
 dependency scan plus `npm run check && npm run test:integrity && npm run build`.
