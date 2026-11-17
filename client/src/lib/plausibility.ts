@@ -219,6 +219,13 @@ export class MetricTracker {
     const reasons: string[] = [];
     let gate: ReportQuality["gate"] = "ok";
 
+    if (this.frames < 3) {
+      reasons.push(
+        `Values come from ${this.frames === 1 ? "a single frame" : `${this.frames} frames`}, so they are provisional. ` +
+          `Hold the smile steady for a moment to settle them.`,
+      );
+    }
+
     if (available.length < MIN_METRICS_FOR_SCORE) {
       gate = "insufficient";
       reasons.push(
@@ -227,12 +234,6 @@ export class MetricTracker {
       );
     } else if (available.length < MIN_METRICS_FOR_FULL_GATE || this.frames < 3) {
       gate = "limited";
-      if (this.frames < 3) {
-        reasons.push(
-          `Values come from ${this.frames === 1 ? "a single frame" : `${this.frames} frames`}, so they are provisional. ` +
-            `Hold the smile steady for a moment to settle them.`,
-        );
-      }
       if (available.length < MIN_METRICS_FOR_FULL_GATE) {
         reasons.push(
           `${available.length} of ${metrics.length} metrics were measurable; the score rests on fewer metrics than a full assessment uses.`,
