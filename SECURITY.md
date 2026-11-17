@@ -108,3 +108,32 @@ for no reduction in actual exposure, so the finding is left visible instead.
 This is a demonstration project. If you find a vulnerability in application code,
 please open an issue describing the impact and reproduction steps; do not include
 real patient data or credentials in the report.
+
+## Verified production exposure (re-verified 2026-11-17)
+
+Both advisories above are confined to development tooling. This is verified, not assumed:
+
+```bash
+npm ls picomatch --omit=dev --all   # -> (empty)
+npm ls esbuild   --omit=dev --all   # -> (empty)
+```
+
+Lockfile census: 533 entries, of which 275 are production dependencies.
+`picomatch` and `esbuild` appear in **zero** of them.
+
+The Dockerfile runtime stage installs with `npm ci --omit=dev` as a non-root
+user, so the deployed image contains neither package, and neither is reachable
+from the client bundle. The running application is not exposed to either advisory.
+
+### Why `picomatch` cannot be patched in this repository
+
+| Check | Result |
+| --- | --- |
+| OSV `fixed_versions` | `[]` (no fix published) |
+| Highest version on npm | `4.0.7` — also the advisory's `last_affected` |
+| Newer major to move to | none (no 4.0.8+, no 5.x) |
+| Consumers | `vite@8.3.8`, `tinyglobby`, `fdir` all require `^4.0.7` |
+
+Only an upstream release can close this. Forcing an older major (3.0.2 is not
+flagged) is semver-incompatible: npm marks it `invalid`, `package.json` desyncs
+from `package-lock.json`, and `npm ci` fails in the Docker build.
