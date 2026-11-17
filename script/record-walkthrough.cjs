@@ -24,48 +24,71 @@ fs.mkdirSync(OUT, { recursive: true });
   const page = await context.newPage();
   const wait = (ms) => page.waitForTimeout(ms);
 
-  await page.goto(URL, { waitUntil: 'networkidle', timeout: 45000 });
-  await wait(1200);
+  const btn = async (name) => {
+    const loc = page.getByRole('button', { name, exact: false });
+    await loc.first().waitFor({ state: 'visible', timeout: 15000 });
+    await loc.first().click();
+  };
+  const ariaBtn = async (prefix) => {
+    const loc = page.locator(`button[aria-label^="${prefix}"]`);
+    await loc.first().waitFor({ state: 'visible', timeout: 15000 });
+    await loc.first().click();
+  };
 
-  await page.getByRole('button', { name: 'Load example case' }).click();
-  await wait(1400);
+  try {
+    await page.goto(URL, { waitUntil: 'networkidle', timeout: 45000 });
+    await wait(1400);
 
-  await page.getByRole('button', { name: 'Get the next step' }).click();
-  await wait(2600); // let the reader see the reason behind the recommendation
+    await btn('Load example case');
+    await wait(1500);
 
-  await page.getByRole('button', { name: 'Patient gives consent' }).click();
-  await wait(900);
+    await btn('Get the next step');
+    await wait(2800); // hold on the plain-language reason
 
-  await page.getByRole('button', { name: 'Choose' }).click();
-  await wait(1200);
+    await btn('Patient gives consent');
+    await wait(1000);
 
-  await page.getByRole('button', { name: /Book meridian-periodontal slot 1/ }).click();
-  await wait(1600);
+    await btn('Choose');
+    await wait(1600);
 
-  await page.getByRole('button', { name: 'Mark visit as missed' }).click();
-  await wait(1400);
+    await ariaBtn('Book ');
+    await wait(1800);
 
-  await page.getByRole('button', { name: 'Run next escalation step' }).click();
-  await wait(1600);
+    await btn('Mark visit as missed');
+    await wait(1500);
 
-  await page.getByRole('button', { name: /Rebook meridian-periodontal/ }).click();
-  await wait(1400);
+    await btn('Run next escalation step');
+    await wait(1700);
 
-  await page.getByPlaceholder('Who checked (name and role)').fill('Nurse A. Bello');
-  await wait(500);
+    await ariaBtn('Rebook ');
+    await wait(1500);
 
-  await page.getByRole('button', { name: 'Visit happened' }).click();
-  await wait(1400);
+    await page.getByPlaceholder('Who checked (name and role)').fill('Nurse A. Bello');
+    await wait(600);
 
-  await page.getByPlaceholder('Clinician name').fill('Dr R. Mensah');
-  await page.getByPlaceholder('Registration / licence number').fill('REG-12345');
-  await wait(700);
+    await btn('Visit happened');
+    await wait(1500);
 
-  await page.getByRole('button', { name: 'Sign off' }).click();
-  await wait(1800);
+    await page.getByPlaceholder('Clinician name').fill('Dr R. Mensah');
+    await page.getByPlaceholder('Registration / licence number').fill('REG-12345');
+    await wait(800);
 
-  await page.getByText('Journey complete').first().waitFor({ state: 'visible', timeout: 8000 });
-  await wait(2600); // hold on the completed journey
+    await btn('Sign off');
+    await wait(2000);
+
+    await page.getByText('Journey complete').first().waitFor({ state: 'visible', timeout: 8000 });
+    await wait(2800); // hold on the completed journey
+  } catch (err) {
+    await page.screenshot({ path: OUT + '/error.png' }).catch(() => {});
+    const labels = await page
+      .$$eval('button', (els) => els.map((e) => (e.getAttribute('aria-label') || e.innerText || '').trim()).filter(Boolean))
+      .catch(() => []);
+    console.error('FLOW_FAILED: ' + (err && err.message ? err.message : err));
+    console.error('BUTTONS: ' + JSON.stringify(labels));
+    await context.close();
+    await browser.close();
+    process.exit(1);
+  }
 
   const video = page.video();
   await context.close();
