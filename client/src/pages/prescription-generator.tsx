@@ -156,9 +156,47 @@ Contact: [Contact Information]`;
         ) : (
           <div className="text-center py-20 space-y-4 text-muted-foreground">
             <p>No patients to prescribe. Create a patient analysis first.</p>
-            <Button onClick={() => navigate("/scanner")} className="bg-primary hover:bg-primary/90 mt-4">
-              Open AR Scanner
-            </Button>
+            <div className="flex flex-wrap items-center justify-center gap-3 mt-4">
+              <Button onClick={() => navigate("/scanner")} className="bg-primary hover:bg-primary/90">
+                Open AR Scanner
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const sample = {
+                    id: Date.now(),
+                    date: new Date().toLocaleDateString(),
+                    patientName: "Sample case (demo)",
+                    harmony: 82,
+                    measurements: {
+                      centralIncisorsWLRatio: 74,
+                      goldenRatioLateral: 58,
+                      gingivalSymmetry: 86,
+                      smileConvexityScore: 72,
+                      verticalDimensionRatio: 47,
+                    },
+                    notes:
+                      "Labelled demo record for the lab-prescription walkthrough. Replace with a real case before issuing.",
+                    clinicalNotes: "",
+                    visitHistory: [],
+                  };
+                  const next = [sample, ...patients];
+                  try {
+                    localStorage.setItem("patientArchive", JSON.stringify(next));
+                  } catch {
+                    /* storage blocked or full - keep the in-memory case */
+                  }
+                  setPatients(next);
+                  setSelectedPatient(sample);
+                  toast({
+                    title: "Sample case loaded",
+                    description: "Labelled demo record, not a real patient.",
+                  });
+                }}
+              >
+                Load sample case
+              </Button>
+            </div>
           </div>
         )}
       </div>

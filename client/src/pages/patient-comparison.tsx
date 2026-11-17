@@ -132,9 +132,54 @@ export default function PatientComparison() {
         ) : (
           <div className="text-center py-20 text-muted-foreground">
             <p>No patients in archive. Add patients to compare.</p>
-            <Button onClick={() => navigate("/patient-archive")} className="mt-4 bg-primary hover:bg-primary/90">
-              Go to Patient Archive
-            </Button>
+            <div className="flex flex-wrap items-center justify-center gap-3 mt-4">
+              <Button onClick={() => navigate("/patient-archive")} className="bg-primary hover:bg-primary/90">
+                Go to Patient Archive
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const baseline = {
+                    id: Date.now(),
+                    date: new Date(Date.now() - 84 * 864e5).toLocaleDateString(),
+                    patientName: "Sample case A (demo, baseline)",
+                    harmony: 68,
+                    measurements: {
+                      centralIncisorsWLRatio: 64,
+                      goldenRatioLateral: 51,
+                      gingivalSymmetry: 72,
+                      smileConvexityScore: 61,
+                      verticalDimensionRatio: 53,
+                    },
+                    notes: "Labelled demo record. Baseline visit before treatment.",
+                  };
+                  const followUp = {
+                    id: Date.now() + 1,
+                    date: new Date().toLocaleDateString(),
+                    patientName: "Sample case A (demo, 12-week review)",
+                    harmony: 84,
+                    measurements: {
+                      centralIncisorsWLRatio: 75,
+                      goldenRatioLateral: 59,
+                      gingivalSymmetry: 88,
+                      smileConvexityScore: 73,
+                      verticalDimensionRatio: 47,
+                    },
+                    notes: "Labelled demo record. Same patient after treatment.",
+                  };
+                  const next = [baseline, followUp, ...patients];
+                  try {
+                    localStorage.setItem("patientArchive", JSON.stringify(next));
+                  } catch {
+                    /* storage blocked or full - keep the in-memory cases */
+                  }
+                  setPatients(next);
+                  setSelected([baseline, followUp]);
+                }}
+              >
+                Load two sample patients
+              </Button>
+            </div>
           </div>
         )}
       </div>
