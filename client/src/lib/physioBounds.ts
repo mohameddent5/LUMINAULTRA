@@ -162,6 +162,13 @@ export const PHYSIO_BOUNDS: Readonly<Record<string, PhysioBound>> = {
     unit: "%",
     rationale: "the central incisor's share of the central+lateral+canine width cannot fall outside 20-70 %",
   },
+  central_crown_length_error: {
+    min: -12,
+    max: 12,
+    unit: "mm",
+    rationale:
+      "signed crown-length error against a patient reference; past ±12 mm the landmarks have locked onto a different tooth rather than mis-measured this one, so the value is a registration failure and not a measurement",
+  },
 };
 
 export interface PlausibilityResult {
