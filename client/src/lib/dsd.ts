@@ -26,6 +26,7 @@
  */
 import { EVIDENCE_BY_ID, classify, resolveBand, weightedHarmony } from "./dsdEvidence";
 import type { Band, MetricEvidence, ProfileId } from "./dsdEvidence";
+import { plausibility } from "./physioBounds";
 import type { Landmark } from "./dentalNet";
 import { foreshorteningFactor, poseGate } from "./poseDepth";
 import type { PoseEstimate } from "./poseDepth";
@@ -85,6 +86,40 @@ export interface DsdReport {
   calibration: CalibrationScale | null;
   /** Frame-level conditions the UI must surface. */
   notes: string[];
+  /**
+   * Data-quality summary. Null on a single raw frame; filled by
+   * stabilizeReport() in plausibility.ts once several frames have been seen.
+   */
+  quality: ReportQuality | null;
+}
+
+/** Per-metric evidence of how settled a value is. */
+export interface MetricQuality {
+  /** Frames that contributed a plausible value for this metric. */
+  samples: number;
+  /** Frames discarded as outliers by the median/MAD filter. */
+  rejected: number;
+  /** Robust spread of the accepted samples, in the metric's unit. */
+  spread: number | null;
+  /** True once enough frames agreed for the value to count as settled. */
+  stable: boolean;
+}
+
+/** Whole-report quality, so the UI can state what the score is based on. */
+export interface ReportQuality {
+  /** Frames aggregated into this report. */
+  frames: number;
+  /** Metrics with a settled value. */
+  stableMetrics: number;
+  /** Metrics that carry a plausible value but are not yet settled. */
+  provisionalMetrics: number;
+  /** Metrics withheld because their inputs were missing or implausible. */
+  withheldMetrics: number;
+  /** Whether the composite score may be shown at all. */
+  gate: "ok" | "limited" | "insufficient";
+  /** One line per reason the gate is not "ok". */
+  reasons: string[];
+  perMetric: MetricQuality[];
 }
 
 /* ------------------------------------------------------------------ geometry */
@@ -362,19 +397,27 @@ export function analyze(input: AnalyzeInput): DsdReport {
     if (!evidence) return;
     const bandRange = resolveBand(evidence, profile, sex);
     const numeric = value !== null && Number.isFinite(value);
-    const available = options.available ?? numeric;
+    // A value outside its physiological bound is a tracking failure, not a
+    // finding: withhold it with the reason instead of grading it.
+    const check = numeric ? plausibility(id, value as number) : null;
+    const plausible = numeric && (check === null || check.ok);
+    const available = (options.available ?? numeric) && plausible;
     const band: Band = options.bandOverride ?? (available ? classify(value, bandRange) : "unavailable");
     const relative = calibrated && calibration ? 0.043 / Math.max(0.4, Math.min(1, calibration.confidence)) : 0;
     results.push({
       id,
       label: evidence.label,
       unit: evidence.unit,
-      value: numeric ? value : null,
-      text: options.text ?? (numeric ? fmt(value as number, evidence.unit, options.digits ?? 1) : NA),
+      value: plausible ? value : null,
+      text: plausible ? (options.text ?? fmt(value as number, evidence.unit, options.digits ?? 1)) : NA,
       band,
-      sigma: numeric && evidence.unit === "mm" && calibrated ? Math.abs(value as number) * relative + 0.4 : null,
+      sigma: plausible && evidence.unit === "mm" && calibrated ? Math.abs(value as number) * relative + 0.4 : null,
       available,
-      reason: available ? undefined : (options.reason ?? NO_TEETH),
+      reason: available
+        ? undefined
+        : check && !check.ok
+          ? check.reason
+          : (options.reason ?? NO_TEETH),
       derivedBand: bandRange?.derived === true,
       grade: evidence.grade,
       refs: evidence.refs,
@@ -690,6 +733,7 @@ export function analyze(input: AnalyzeInput): DsdReport {
     total: results.length,
     calibration,
     notes,
+    quality: null,
   };
 }
 
