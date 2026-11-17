@@ -61,6 +61,15 @@ export default function HomeLanding() {
               Start Clinical Analysis
               <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
+
+            <Button
+              onClick={() => navigate("/care-journey")}
+              variant="outline"
+              className="px-8 py-6 text-base font-semibold border-emerald-400/40 text-emerald-200 hover:bg-emerald-400/10 rounded-xl"
+            >
+              Screening to Care Journey
+              <ArrowRight className="w-5 h-5 ml-2" />
+            </Button>
             
             <Button 
               onClick={() => navigate("/clinical-dashboard")}

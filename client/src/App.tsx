@@ -16,6 +16,7 @@ import ClinicalGuidelines from "@/pages/clinical-guidelines";
 import Validation from "@/pages/validation";
 import Model from "@/pages/model";
 import PatientComparison from "@/pages/patient-comparison";
+import CareJourney from "@/pages/care-journey";
 
 function Router() {
   return (
@@ -32,6 +33,7 @@ function Router() {
       <Route path="/validation" component={Validation} />
       <Route path="/model" component={Model} />
       <Route path="/patient-comparison" component={PatientComparison} />
+      <Route path="/care-journey" component={CareJourney} />
       <Route component={NotFound} />
     </Switch>
   );

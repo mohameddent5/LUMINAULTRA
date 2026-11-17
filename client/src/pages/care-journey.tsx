@@ -296,7 +296,7 @@ export default function CareJourney() {
           </div>
         )}
 
-        {isComplete(active ?? undefined as unknown as CarePathway) === true && active && (
+        {active && isComplete(active) && (
           <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 flex items-start gap-3">
             <ShieldCheck className="w-5 h-5 text-emerald-400 mt-0.5" />
             <div>
@@ -532,7 +532,7 @@ export default function CareJourney() {
                             onChange={(e) => {
                               const updated: CarePathway = {
                                 ...active,
-                                consent: { ...active.consent, [key]: e.target.checked },
+                                consent: { ...active.consent, [key]: e.target.checked } as CarePathway["consent"],
                               };
                               apply(updated);
                             }}
