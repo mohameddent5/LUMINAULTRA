@@ -4,10 +4,10 @@
  * video link for judges. Not part of the app build; run manually.
  */
 const fs = require('fs');
-const { chromium } = require('/opt/appjet/browser/node_modules/playright');
+const { chromium } = require('/opt/appjet/browser/node_modules/playwright');
 
 const OUT = '/tmp/walkthrough';
-const URL = process.env.WALKTHROUGH_URL || 'https://jo5nrkmcl9.dev.ap-jt.com/care-jurney';
+const URL = process.env.WALKTHROUGH_URL || 'https://jo5nrkmcl9.dev.ap-jt.com/care-journey';
 
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -57,7 +57,7 @@ fs.mkdirSync(OUT, { recursive: true });
   await page.getByRole('button', { name: 'Visit happened' }).click();
   await wait(1400);
 
-  await page.getByPlaceholder('Clinition name').fill('Dr R. Mensah');
+  await page.getByPlaceholder('Clinician name').fill('Dr R. Mensah');
   await page.getByPlaceholder('Registration / licence number').fill('REG-12345');
   await wait(700);
 
