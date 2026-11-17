@@ -714,6 +714,7 @@ export default function CareJourney() {
                                 key={`${prov.id}-${slot}`}
                                 size="sm"
                                 variant="secondary"
+                                aria-label={`Rebook ${prov.id}`}
                                 onClick={() => {
                                   apply(rebook(active, prov, slot));
                                   flash("Visit rebooked.");
