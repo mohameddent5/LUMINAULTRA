@@ -10,6 +10,8 @@ import {
   type BenchmarkResult,
   type PredictionsFile,
 } from "@/lib/benchmark";
+import { PHYSIO_BOUNDS } from "@/lib/physioBounds";
+import { MIN_METRICS_FOR_SCORE } from "@/lib/plausibility";
 import gtRaw from "../../../shared/benchmark-selftest.gt.json?raw";
 import predRaw from "../../../shared/benchmark-selftest.pred.json?raw";
 
@@ -158,6 +160,49 @@ export default function Validation() {
           <>
             {/* Provenance */}
             <div className="grid md:grid-cols-3 gap-4">
+              <Card
+                title="Measurement integrity"
+                subtitle="The gate that stops an impossible reading from being graded"
+              >
+                <p className="text-sm text-muted-foreground">
+                  Landmarks jitter. One frame with a misplaced keypoint produces geometry that is
+                  arithmetically valid and physically impossible: a −40 mm gingival display, a 300 %
+                  width/length ratio, an 89° cant. Those values are not clamped, because clamping
+                  silently invents a borderline measurement. Instead every metric declares the range a
+                  human being can actually occupy, and a reading outside it becomes unavailable with a
+                  stated reason and is excluded from the score.
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-xs uppercase tracking-wide text-muted-foreground">
+                        <th className="text-left py-1 pr-3">Metric</th>
+                        <th className="text-left py-1 pr-3">Possible</th>
+                        <th className="text-left py-1">Why the bound sits there</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(PHYSIO_BOUNDS).map(([id, b]) => (
+                        <tr key={id} className="border-t border-white/5 align-top">
+                          <td className="py-2 pr-3 font-mono text-xs text-white whitespace-nowrap">{id}</td>
+                          <td className="py-2 pr-3 text-white whitespace-nowrap">
+                            {b.min} – {b.max}
+                            {b.unit === "mm" ? " mm" : b.unit === "deg" ? "°" : b.unit === "%" ? " %" : ""}
+                          </td>
+                          <td className="py-2 text-xs text-muted-foreground">{b.rationale}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  On top of the gate, every reported value is a median over a rolling window with
+                  outlier rejection, so a single spiking frame cannot move a settled reading. A
+                  composite harmony score is withheld entirely below {MIN_METRICS_FOR_SCORE} measurable
+                  metrics, and the report states how many frames it saw, how many readings it discarded
+                  and which metrics are still provisional.
+                </p>
+              </Card>
               <Card title="Evaluator" subtitle="evaluate.py, ported to TypeScript">
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   The uploaded Python reference stays authoritative and runnable as a CLI. This page runs a
