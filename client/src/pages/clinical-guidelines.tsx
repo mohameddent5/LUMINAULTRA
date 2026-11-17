@@ -85,12 +85,6 @@ export default function ClinicalGuidelines() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-accent/5">
-      <nav className="flex items-center justify-between px-6 py-4 border-b border-white/10 backdrop-blur-sm">
-        <h1 className="font-heading font-bold text-white">Clinical Guidelines</h1>
-        <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="text-white hover:bg-white/10">
-          <Home className="w-5 h-5" />
-        </Button>
-      </nav>
 
       <div className="max-w-5xl mx-auto p-6 space-y-8">
         {/* DSD Standards */}
