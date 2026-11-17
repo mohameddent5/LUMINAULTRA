@@ -17,6 +17,7 @@ import Validation from "@/pages/validation";
 import Model from "@/pages/model";
 import PatientComparison from "@/pages/patient-comparison";
 import CareJourney from "@/pages/care-journey";
+import AppShell from "@/components/AppShell";
 
 function Router() {
   return (
@@ -44,7 +45,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
-        <Router />
+        <AppShell>
+          <Router />
+        </AppShell>
       </TooltipProvider>
     </QueryClientProvider>
   );

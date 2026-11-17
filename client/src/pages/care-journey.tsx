@@ -229,36 +229,41 @@ export default function CareJourney() {
   const steps = active ? journeySteps(active) : [];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-accent/5 text-white">
-      <nav className="flex items-center justify-between px-6 py-4 border-b border-white/10 backdrop-blur-sm sticky top-0 z-10 bg-background/80">
-        <div className="flex items-center gap-3">
-          <Stethoscope className="w-5 h-5 text-accent" />
-          <h1 className="font-heading font-bold">Care Pathway</h1>
-          <Badge className="hidden sm:inline-flex border-white/20 text-white/70">
-            screening to completed care
-          </Badge>
-        </div>
-        <div className="flex items-center gap-2">
-          {pathways.length > 0 && (
-            <select
-              value={activeId ?? ""}
-              onChange={(e) => setActiveId(e.target.value)}
-              className="bg-white/5 border border-white/15 rounded-md px-2 py-1.5 text-sm text-white"
-            >
-              {pathways.map((p) => (
-                <option key={p.id} value={p.id} className="bg-neutral-900">
-                  {p.screening.patientName} — {new Date(p.createdAt).toLocaleDateString()}
-                </option>
-              ))}
-            </select>
-          )}
-          <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="text-white hover:bg-white/10">
-            <Home className="w-5 h-5" />
-          </Button>
-        </div>
-      </nav>
-
+    <div className="min-h-full text-white">
       <div className="max-w-6xl mx-auto p-4 sm:p-6 space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Stethoscope className="w-4 h-4 text-accent" />
+            <button onClick={() => navigate("/")} className="hover:text-white transition-colors">
+              Home
+            </button>
+            <span className="text-white/25">/</span>
+            <span className="font-medium text-white">Screening to care</span>
+            <Badge className="hidden sm:inline-flex border-white/20 text-white/70">
+              screening to completed care
+            </Badge>
+          </div>
+          <div className="flex items-center gap-2">
+            {pathways.length > 0 && (
+              <select
+                value={activeId ?? ""}
+                onChange={(e) => setActiveId(e.target.value)}
+                aria-label="Open a saved pathway"
+                className="bg-white/5 border border-white/15 rounded-md px-2 py-1.5 text-sm text-white"
+              >
+                {pathways.map((p) => (
+                  <option key={p.id} value={p.id} className="bg-neutral-900">
+                    {p.screening.patientName} — {new Date(p.createdAt).toLocaleDateString()}
+                  </option>
+                ))}
+              </select>
+            )}
+            <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="text-white/80 hover:bg-white/10">
+              <Home className="w-4 h-4 mr-1.5" />
+              Dashboard
+            </Button>
+          </div>
+        </div>
         {notice && (
           <div className="rounded-lg border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-white/90">
             {notice}
