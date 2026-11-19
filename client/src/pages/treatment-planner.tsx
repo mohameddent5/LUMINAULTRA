@@ -10,11 +10,12 @@ export default function TreatmentPlanner() {
   const [, navigate] = useLocation();
   const [patients, setPatients] = useState<any[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<any | null>(null);
+  // Planning TARGETS, not measurements. These are the values the clinician
+  // intends to design toward; they are not read from the patient's photograph.
   const [measurements, setMeasurements] = useState({
     wlRatio: 78,
     goldenRatio: 62,
     gingivalSym: 85,
-    smileConvexity: 70,
     vdoRatio: 45,
   });
 
@@ -27,25 +28,27 @@ export default function TreatmentPlanner() {
         wlRatio: archive[0].measurements?.wlRatio || 78,
         goldenRatio: archive[0].measurements?.goldenRatio || 62,
         gingivalSym: archive[0].measurements?.gingivalSym || 85,
-        smileConvexity: archive[0].measurements?.smileConvexity || 70,
         vdoRatio: archive[0].measurements?.vdoRatio || 45,
       });
     }
   }, []);
 
-  const calculateHarmony = () => {
+  // Distance between the planned values and their targets. Deliberately NOT
+  // called a harmony/quality score: it measures agreement with a plan the
+  // clinician typed in, so a perfect number here means "matches your own
+  // targets", nothing about the patient.
+  const calculateTargetAlignment = () => {
     const deviations = [
       Math.abs(measurements.wlRatio - 78) / 78 * 100,
       Math.abs(measurements.goldenRatio - 62) / 62 * 100,
       Math.abs(measurements.gingivalSym - 90) / 90 * 100,
-      Math.abs(measurements.smileConvexity - 75) / 75 * 100,
       Math.abs(measurements.vdoRatio - 45) / 45 * 100,
     ];
     const avgDeviation = deviations.reduce((a, b) => a + b) / deviations.length;
     return Math.max(0, 100 - avgDeviation);
   };
 
-  const harmony = calculateHarmony();
+  const alignment = calculateTargetAlignment();
 
   const savePlan = () => {
     const plans = JSON.parse(localStorage.getItem("treatmentPlans") || "[]");
@@ -53,12 +56,13 @@ export default function TreatmentPlanner() {
       id: Date.now(),
       date: new Date().toLocaleDateString(),
       measurements,
-      harmony: harmony.toFixed(0),
+      // Field name kept as `harmony` so existing saved plans still read back.
+      harmony: alignment.toFixed(0),
     });
     localStorage.setItem("treatmentPlans", JSON.stringify(plans));
     toast({
       title: "Treatment Plan Saved",
-      description: `Harmony Score: ${harmony.toFixed(0)}/100`,
+      description: `Plan alignment to targets: ${alignment.toFixed(0)}%`,
     });
   };
 
@@ -66,7 +70,6 @@ export default function TreatmentPlanner() {
     ...(measurements.wlRatio < 75 ? ["⚠ Central incisor width expansion needed"] : []),
     ...(measurements.goldenRatio < 60 ? ["⚠ Lateral incisor width adjustment required"] : []),
     ...(measurements.gingivalSym < 80 ? ["⚠ Periodontal contouring for symmetry"] : []),
-    ...(measurements.smileConvexity < 60 ? ["⚠ Smile arc orthodontic correction"] : []),
     ...(measurements.vdoRatio > 48 ? ["⚠ Excessive vertical dimension - posterior support evaluation"] : []),
   ];
 
@@ -88,7 +91,6 @@ export default function TreatmentPlanner() {
                       wlRatio: patient.measurements?.wlRatio || 78,
                       goldenRatio: patient.measurements?.goldenRatio || 62,
                       gingivalSym: patient.measurements?.gingivalSym || 85,
-                      smileConvexity: patient.measurements?.smileConvexity || 70,
                       vdoRatio: patient.measurements?.vdoRatio || 45,
                     });
                   }
@@ -113,9 +115,8 @@ export default function TreatmentPlanner() {
             {[
               { label: "W/L Ratio (ideal 78%)", key: "wlRatio", min: 70, max: 85 },
               { label: "Golden Ratio (ideal 62%)", key: "goldenRatio", min: 55, max: 70 },
-              { label: "Gingival Symmetry (ideal 90%)", key: "gingivalSym", min: 70, max: 100 },
-              { label: "Smile Convexity (ideal 75)", key: "smileConvexity", min: 50, max: 100 },
-              { label: "VDO Ratio (ideal 45%)", key: "vdoRatio", min: 40, max: 50 },
+              { label: "Gingival Symmetry (target 90%)", key: "gingivalSym", min: 70, max: 100 },
+              { label: "VDO Ratio (target 45%)", key: "vdoRatio", min: 40, max: 50 },
             ].map(({ label, key, min, max }) => (
               <div key={key} className="space-y-2">
                 <div className="flex justify-between">
@@ -134,19 +135,16 @@ export default function TreatmentPlanner() {
             ))}
           </div>
 
-          <div className="grid grid-cols-2 gap-4 p-4 bg-white/5 rounded-lg border border-white/10">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Smile Harmony Score</p>
-              <div className={`text-3xl font-bold ${harmony >= 85 ? "text-green-400" : harmony >= 70 ? "text-yellow-400" : "text-red-400"}`}>
-                {harmony.toFixed(0)}
-              </div>
+          <div className="space-y-2 p-4 bg-white/5 rounded-lg border border-white/10">
+            <div className="flex items-baseline justify-between">
+              <p className="text-xs text-muted-foreground">Plan alignment to the targets above</p>
+              <p className="text-2xl font-bold text-white">{alignment.toFixed(0)}%</p>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Classification</p>
-              <p className="text-sm text-white font-semibold">
-                {harmony >= 85 ? "Excellent" : harmony >= 70 ? "Acceptable" : "Needs Attention"}
-              </p>
-            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              The distance between these sliders and the target values, nothing more. It is a
+              planning aid — not a measurement, not a clinical grade, and it does not read the
+              patient's photograph. Record measured values in the AR scanner first.
+            </p>
           </div>
 
           {treatmentSpecs.length > 0 && (
