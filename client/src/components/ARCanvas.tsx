@@ -32,6 +32,7 @@ import {
 import type { DsdReport } from "@/lib/dsd";
 import { estimatePose } from "@/lib/poseDepth";
 import { fuseFrame, type FusedFrame } from "@/lib/fusion";
+import { evaluateCapture, type CaptureQuality } from "@/lib/captureQuality";
 import { DEPTH_INPUT_SIZE, loadDepthEstimator, type DepthEstimator } from "@/lib/depthModel";
 
 const MEDIAPIPE_ESM_URL =
@@ -150,6 +151,11 @@ export function ARCanvas() {
   // filtered out before it can reach the clinician-facing report or the score.
   const trackerRef = useRef(new MetricTracker({ window: 24, minSamples: 5 }));
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Pixel-level capture gate state. `captureCanvas` is a small offscreen copy so
+  // the gate can read luma without touching the visible canvas.
+  const captureRef = useRef<CaptureQuality | null>(null);
+  const captureAtRef = useRef(0);
+  const captureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const compositeCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -630,6 +636,56 @@ export function ARCanvas() {
       tracker: trackerRef.current,
     });
 
+    // Pixel-level gate: sharpness, exposure, resolution and mouth size. Sampled
+    // at most every 900 ms from a downscaled full-frame copy, because a
+    // per-frame getImageData costs more than face tracking on a 1 vCPU
+    // deployment. A crop would not preserve the high frequencies the Laplacian
+    // needs, so the whole frame is used, just smaller.
+    if (video && Date.now() - captureAtRef.current > 900) {
+      captureAtRef.current = Date.now();
+      try {
+        let scratch = captureCanvasRef.current;
+        if (!scratch) {
+          scratch = document.createElement("canvas");
+          captureCanvasRef.current = scratch;
+        }
+        const maxW = 960;
+        const scale = video.videoWidth > maxW ? maxW / video.videoWidth : 1;
+        const sw = Math.max(1, Math.round(video.videoWidth * scale));
+        const sh = Math.max(1, Math.round(video.videoHeight * scale));
+        if (scratch.width !== sw || scratch.height !== sh) {
+          scratch.width = sw;
+          scratch.height = sh;
+        }
+        const sctx = scratch.getContext("2d", { willReadFrequently: true });
+        if (sctx && sw >= 3 && sh >= 3) {
+          // Nearest-neighbour keeps edge energy, so downscaling does not read as
+          // defocus.
+          sctx.imageSmoothingEnabled = false;
+          sctx.drawImage(video, 0, 0, sw, sh);
+          const pixels = sctx.getImageData(0, 0, sw, sh).data;
+          const luma = new Float32Array(sw * sh);
+          for (let i = 0, p = 0; i < luma.length; i += 1, p += 4) {
+            luma[i] = 0.299 * pixels[p] + 0.587 * pixels[p + 1] + 0.114 * pixels[p + 2];
+          }
+          const mouthPoints = [61, 291, 13, 14, 78, 308]
+            .map((index) => landmarks[index])
+            .filter((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y))
+            .map((p) => ({ x: p.x, y: p.y }));
+          captureRef.current = evaluateCapture({
+            luma,
+            width: sw,
+            height: sh,
+            mouthPoints,
+            teethCount: teethRef.current?.length ?? 0,
+          });
+        }
+      } catch {
+        // A refused pixel read (tainted canvas, lost context) must never stop
+        // the preview; the gate simply stays on its last verdict.
+      }
+    }
+
     // One fused verdict for the frame: pose, depth, keypoints and calibration
     // combined, so the overlay asks a single question instead of re-deriving
     // flags in several places.
@@ -638,6 +694,7 @@ export function ARCanvas() {
       teethCount: teethRef.current?.length ?? 0,
       calibrated: Boolean(calibration),
       onnxDepthAvailable: depthAvailableRef.current,
+      capture: captureRef.current,
     });
 
     const measured = (id: string): number => metricValue(report, id) ?? Number.NaN;
@@ -1771,7 +1828,7 @@ End of Report | Lumina Ultra™ v1.0
               >
                 {displayedHarmony}/100
               </Badge>
-              <p className="text-[10px] text-white/50">Harmony Score</p>
+              <p className="text-[10px] text-white/50">Prioritisation index — not a grade</p>
             </div>
           </div>
         )}
