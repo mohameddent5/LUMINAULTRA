@@ -1537,6 +1537,83 @@ End of Report | Lumina Ultra™ v1.0
     });
   };
 
+  // A patient-facing summary. Deliberately narrower than the clinician report:
+  // only metrics a webcam frame can actually defend are shown, and no
+  // millimetre value whose scale is a population average is ever printed as a
+  // measurement. Everything withheld is listed with its reason, so the absence
+  // is visible instead of silently dropped.
+  const generatePatientReport = () => {
+    if (!analysis) return;
+    const metrics = analysis.report.metrics;
+    const defensible = metrics.filter(
+      (m) =>
+        m.available &&
+        m.provenance !== "unknown" &&
+        !(m.unit === "mm" && m.provenance === "assumed"),
+    );
+    const withheld = metrics.filter((m) => !defensible.includes(m));
+
+    const lines = defensible.map(
+      (m) => `• ${m.label}: ${m.text}${m.idealText ? `\n  Guide: ${m.idealText}` : ""}`,
+    );
+
+    const report = `
+═══════════════════════════════════════
+LUMINA ULTRA — SUMMARY FOR YOU
+═══════════════════════════════════════
+Prepared: ${new Date().toLocaleString()}
+
+This summary describes proportions seen in a photograph of your smile.
+It is not a diagnosis and does not replace an examination.
+
+═══ WHAT THE PHOTO SHOWS ═══
+${lines.length > 0 ? lines.join("\n") : "Nothing could be measured reliably from this photo."}
+
+═══ WHAT THIS PHOTO CANNOT TELL YOU ═══
+${
+  withheld
+    .map(
+      (m) =>
+        `• ${m.label}: not reported — ${m.reason ?? "needs a clearer photo or a known real-world size"}`,
+    )
+    .join("\n") || "• (none)"
+}
+
+═══ HOW TO READ THE NUMBERS ═══
+Percentages and ratios compare parts of your smile with each other. They stay
+valid from any photo.
+Distances in millimetres are shown only when a known real-world size was used
+to set the scale. Otherwise they are left out on purpose, because a guessed
+scale would produce a confident-looking number that means nothing.
+
+═══ YOUR NEXT STEP ═══
+Bring this summary to your dentist. They will confirm or correct each point
+with an examination and, where needed, records such as X-rays or models.
+Only they can decide whether any treatment is appropriate.
+
+═══ PRIVACY ═══
+This analysis ran entirely in this browser. No photo or measurement was sent
+to a server.
+
+═══════════════════════════════════════
+End of summary
+═══════════════════════════════════════
+    `;
+
+    const element = document.createElement("a");
+    element.setAttribute("href", "data:text/plain;charset=utf-8," + encodeURIComponent(report));
+    element.setAttribute("download", `lumina-patient-summary-${Date.now()}.txt`);
+    element.style.display = "none";
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+
+    toast({
+      title: "Patient summary generated",
+      description: "Plain-language summary downloaded.",
+    });
+  };
+
   const generateTreatmentPlan = (analysis: AnalysisResult): string => {
     const meas = analysis.measurements;
     const recommendations = [];
@@ -1950,6 +2027,11 @@ End of Report | Lumina Ultra™ v1.0
             Report
           </Button>
         </div>
+
+        <Button variant="outline" className="w-full" onClick={generatePatientReport}>
+          <Download className="w-4 h-4 mr-2" />
+          Patient summary (plain language)
+        </Button>
 
         <Button
           variant="outline"
