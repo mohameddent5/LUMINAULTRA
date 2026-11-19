@@ -641,7 +641,8 @@ export function ARCanvas() {
     // per-frame getImageData costs more than face tracking on a 1 vCPU
     // deployment. A crop would not preserve the high frequencies the Laplacian
     // needs, so the whole frame is used, just smaller.
-    if (video && Date.now() - captureAtRef.current > 900) {
+    const captureVideo = videoRef.current;
+    if (captureVideo && Date.now() - captureAtRef.current > 900) {
       captureAtRef.current = Date.now();
       try {
         let scratch = captureCanvasRef.current;
@@ -650,9 +651,9 @@ export function ARCanvas() {
           captureCanvasRef.current = scratch;
         }
         const maxW = 960;
-        const scale = video.videoWidth > maxW ? maxW / video.videoWidth : 1;
-        const sw = Math.max(1, Math.round(video.videoWidth * scale));
-        const sh = Math.max(1, Math.round(video.videoHeight * scale));
+        const scale = captureVideo.videoWidth > maxW ? maxW / captureVideo.videoWidth : 1;
+        const sw = Math.max(1, Math.round(captureVideo.videoWidth * scale));
+        const sh = Math.max(1, Math.round(captureVideo.videoHeight * scale));
         if (scratch.width !== sw || scratch.height !== sh) {
           scratch.width = sw;
           scratch.height = sh;
@@ -662,7 +663,7 @@ export function ARCanvas() {
           // Nearest-neighbour keeps edge energy, so downscaling does not read as
           // defocus.
           sctx.imageSmoothingEnabled = false;
-          sctx.drawImage(video, 0, 0, sw, sh);
+          sctx.drawImage(captureVideo, 0, 0, sw, sh);
           const pixels = sctx.getImageData(0, 0, sw, sh).data;
           const luma = new Float32Array(sw * sh);
           for (let i = 0, p = 0; i < luma.length; i += 1, p += 4) {
