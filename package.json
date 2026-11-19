@@ -15,6 +15,7 @@
     "test:care": "tsx script/test-care.ts",
     "test:plausibility": "tsx script/test-plausibility.ts",
     "test:integrity": "tsx script/test-integrity-audit.ts",
+    "test:capture": "tsx script/test-capture-quality.ts",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
