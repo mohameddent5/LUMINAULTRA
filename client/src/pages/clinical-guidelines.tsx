@@ -32,9 +32,9 @@ export default function ClinicalGuidelines() {
     },
     {
       category: "Smile Convexity",
-      standard: "Smooth arc (>70 score)",
-      description: "Smoothness of smile line curvature",
-      clinicalUse: "Evaluate smile line quality; plan smile expansion",
+      standard: "Not scored — see Smile Arc",
+      description: "Smile-line curvature has no validated numeric scale",
+      clinicalUse: "Assess the arc against the lower lip; no score is reported",
     },
     {
       category: "Vertical Dimension of Occlusion",

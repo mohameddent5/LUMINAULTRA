@@ -351,7 +351,7 @@ export function ARCanvas() {
       lipSupportScore: 85,
       profileAnalysisNeeded: true,
       verticalDimensionRatio: 50,
-      smileConvexityScore: 70,
+      smileConvexityScore: Number.NaN,
       toothVisibilityAtRest: 0,
       smileAnimationPathway: "Balanced",
       intercanineWidth: 0,
@@ -483,16 +483,13 @@ export function ARCanvas() {
 
       // SMILE CONVEXITY SCORE (Arc smoothness - affects perception)
       // Measure how smooth/curved the smile line is vs straight
-      const smileCurvePoints = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291];
-      let curvatureTotal = 0;
-      for (let i = 1; i < smileCurvePoints.length - 1; i++) {
-        const prev = landmarks[smileCurvePoints[i - 1]];
-        const curr = landmarks[smileCurvePoints[i]];
-        const next = landmarks[smileCurvePoints[i + 1]];
-        const curve = Math.abs((prev.y + next.y) / 2 - curr.y);
-        curvatureTotal += curve;
-      }
-      measurements.smileConvexityScore = Math.min((curvatureTotal * 500), 100); // Smooth curve = high score
+      // Retired. This was a curvature sum multiplied by an arbitrary 500 to land
+      // on a 0-100 scale, then presented in clinical-guidelines.tsx as a ">70"
+      // standard. Nothing in the evidence review supports that scale. Smile-arc
+      // geometry is measured properly by the DSD core (`smile_arc`: incisal edges
+      // against the lower lip, in mm on a calibrated scale), so this duplicate is
+      // withheld instead of scored.
+      measurements.smileConvexityScore = Number.NaN;
 
       // TOOTH VISIBILITY AT REST (How many teeth show with lips closed)
       // If lips are touching but show some teeth, count visible tooth pixels
