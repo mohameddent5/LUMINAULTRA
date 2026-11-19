@@ -1340,16 +1340,19 @@ export function ARCanvas() {
 LUMINA ULTRA - CLINICAL DSD ANALYSIS REPORT
 ═══════════════════════════════════════════════════════════════
 Generated: ${timestamp}
-Platform Version: 1.0 Clinical Grade
+Platform Version: ${analysis.report.metrics[0]?.algorithmVersion ?? "unversioned"}
 
-═══ OVERALL HARMONY SCORE ═══
-${analysis.overallHarmony}/100 ${
-      analysis.overallHarmony >= 85
-        ? "✓ EXCELLENT"
-        : analysis.overallHarmony >= 70
-          ? "△ ACCEPTABLE"
-          : "⚠ REQUIRES ATTENTION"
-    }
+═══ PRIORITIZATION INDEX ═══
+${analysis.overallHarmony}/100
+This number ranks the component metrics below. It is not a clinical grade,
+not a diagnosis, and it is not comparable between patients.
+
+═══ PROVENANCE ═══
+Algorithm: ${analysis.report.metrics[0]?.algorithmVersion ?? "unversioned"}
+Calibration: ${analysis.calibration ? `${analysis.calibration.label} (confidence ${(analysis.calibration.confidence * 100).toFixed(0)}%)` : "none — millimetre values withheld"}
+A millimetre value is only 'measured' when the scale came from a known size.
+Iris, interpupillary and face-width scales are population averages and are
+reported as 'assumed', never as measurements.
 
 ═══ SMILE CLASSIFICATION ═══
 ${analysis.classificationNotes}
@@ -1388,16 +1391,25 @@ ${analysis.classificationNotes}
   ${meas.gingivalMarginDev.map((d, i) => `  Tooth ${i + 1}: ${d.toFixed(2)}mm`).join("\n  ")}
 
 ═══ SMILE CHARACTERISTICS ═══
-• Smile Arc Deviation Score: ${(100 - Math.min(meas.smileArcDeviation, 50)).toFixed(0)}/100
-  (Should follow lower lip curve)
+• Smile Arc Deviation: ${fmt(meas.smileArcDeviation, 1, "mm")}
+  (Incisal edges should follow the lower lip curve; millimetres need a scale)
   
-• Smile Fullness: ${meas.smileFullness.toFixed(1)}%
-  Classification: ${meas.smileFullness > 80 ? "High/Gummy Smile" : meas.smileFullness < 50 ? "Low Smile" : "Normal Smile"}
-  ${meas.smileFullness >= 50 && meas.smileFullness <= 80 ? "✓" : "⚠"}
+• Smile Fullness: ${fmt(meas.smileFullness, 1, "%")}
+  ${
+    Number.isFinite(meas.smileFullness)
+      ? `Classification: ${meas.smileFullness > 80 ? "High/Gummy Smile" : meas.smileFullness < 50 ? "Low Smile" : "Normal Smile"}`
+      : "— not measurable on this frame (needs gingival and incisal landmarks)"
+  }
 
-• Buccal Corridors: ${meas.buccalCorridors.toFixed(2)}mm
-  Ideal Range: 2-4mm (Tooth visibility optimization)
-  Status: ${meas.buccalCorridors >= 2 && meas.buccalCorridors <= 4 ? "✓ IDEAL" : "△ ADJUSTMENT SUGGESTED"}
+• Buccal Corridors: ${fmt(meas.buccalCorridors, 2, "mm")}
+  Ideal Range: 2-4mm (tooth visibility)
+  Status: ${
+    !Number.isFinite(meas.buccalCorridors)
+      ? "— not measurable"
+      : meas.buccalCorridors >= 2 && meas.buccalCorridors <= 4
+        ? "✓ IDEAL"
+        : "△ ADJUSTMENT SUGGESTED"
+  }
 
 • Canine Position Deviation: ${meas.caninePositionDev.toFixed(2)}mm
   (Should be at smile corner)
