@@ -1953,11 +1953,11 @@ End of summary
                 <span className="text-[8px] text-white/40">{analysis.measurementConfidence["VDO"]}% conf</span>
               </div>
               <div className="flex flex-col">
-                <span>Conv: {analysis.measurements.smileConvexityScore.toFixed(0)}</span>
-                <span className="text-[8px] text-white/40">{analysis.measurementConfidence["Conv"]}% conf</span>
+                <span>Arc: {Number.isFinite(analysis.measurements.smileArcDeviation) ? `${analysis.measurements.smileArcDeviation.toFixed(1)}mm` : "n/a"}</span>
+                <span className="text-[8px] text-white/40">smile arc</span>
               </div>
               <div className="flex flex-col">
-                <span>Rest: {analysis.measurements.toothVisibilityAtRest.toFixed(0)}%</span>
+                <span>Rest: {Number.isFinite(analysis.measurements.toothVisibilityAtRest) ? `${analysis.measurements.toothVisibilityAtRest.toFixed(0)}%` : "n/a"}</span>
                 <span className="text-[8px] text-white/40">{analysis.measurementConfidence["RestTooth"]}% conf</span>
               </div>
               <div className="flex flex-col">
@@ -1965,7 +1965,7 @@ End of summary
                 <span className="text-[8px] text-white/40">{analysis.measurementConfidence["Pathway"]}% conf</span>
               </div>
               <div className="flex flex-col">
-                <span>Mouth: {analysis.measurements.intercommissuralWidth.toFixed(1)}mm</span>
+                <span>Mouth: {Number.isFinite(analysis.measurements.intercommissuralWidth) ? `${analysis.measurements.intercommissuralWidth.toFixed(1)}mm` : "n/a"}</span>
                 <span className="text-[8px] text-white/40">{analysis.calibration.mmPerPixel > 0 ? `${(analysis.calibration.confidence * 100).toFixed(0)}% scale` : "uncalibrated"}</span>
               </div>
             </div>
