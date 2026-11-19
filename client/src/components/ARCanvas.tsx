@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { calibrateFromLandmarks, toMillimetres, type Calibration } from "@/lib/clinicalScale";
+import { calibrateFromLandmarks, manualCalibration, toMillimetres, type Calibration } from "@/lib/clinicalScale";
 import { buildReport, metricValue } from "@/lib/dsdBridge";
 import { MetricTracker, qualityLabel } from "@/lib/plausibility";
 import {
@@ -192,6 +192,14 @@ export function ARCanvas() {
   const depthCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const depthHeatRef = useRef<HTMLCanvasElement | null>(null);
   const [depthStatus, setDepthStatus] = useState<"idle" | "loading" | "ready" | "absent">("idle");
+
+  // Clinician-entered scale. When set it overrides the anatomical estimate, so
+  // millimetres become measured instead of assumed. Held in a ref as well as
+  // state because the per-frame analysis callback must read the latest value.
+  const [manualScaleMm, setManualScaleMm] = useState("");
+  const [manualScalePx, setManualScalePx] = useState("");
+  const [manualScaleLabel, setManualScaleLabel] = useState<string | null>(null);
+  const manualCalibrationRef = useRef<Calibration | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -367,7 +375,9 @@ export function ARCanvas() {
     // Derive the metric scale from the face itself (iris diameter) so that
     // millimetre values rest on an anatomical reference instead of an
     // assumed pixel factor. Falls back to IPD, then face width.
-    const calibration = calibrateFromLandmarks(landmarks, w, h);
+    // A clinician-entered reference outranks the anatomical estimate: it is the
+    // only path that turns "assumed" millimetres into measured ones.
+    const calibration = manualCalibrationRef.current ?? calibrateFromLandmarks(landmarks, w, h);
     const toMm = (pixels: number) => toMillimetres(pixels, calibration);
 
     try {
@@ -1542,6 +1552,35 @@ End of Report | Lumina Ultra™ v1.0
   // millimetre value whose scale is a population average is ever printed as a
   // measurement. Everything withheld is listed with its reason, so the absence
   // is visible instead of silently dropped.
+  const applyManualScale = () => {
+    const mm = Number.parseFloat(manualScaleMm);
+    const px = Number.parseFloat(manualScalePx);
+    const calibration = manualCalibration(mm, px);
+    if (!calibration) {
+      toast({
+        title: "Scale not applied",
+        description:
+          "Enter a positive reference width in millimetres and the pixel span it covers. The result must fall between 0.02 and 2 mm per pixel.",
+      });
+      return;
+    }
+    manualCalibrationRef.current = calibration;
+    setManualScaleLabel(calibration.label);
+    toast({
+      title: "Manual scale applied",
+      description: `${calibration.label} · ${(calibration.confidence * 100).toFixed(0)}% confidence`,
+    });
+  };
+
+  const clearManualScale = () => {
+    manualCalibrationRef.current = null;
+    setManualScaleLabel(null);
+    toast({
+      title: "Scale cleared",
+      description: "Millimetres fall back to the anatomical estimate (iris, then interpupillary, then face width).",
+    });
+  };
+
   const generatePatientReport = () => {
     if (!analysis) return;
     const metrics = analysis.report.metrics;
@@ -1996,6 +2035,51 @@ End of summary
                   ? `${analysis.calibration.label} · ${(analysis.calibration.confidence * 100).toFixed(0)}% scale confidence`
                   : "No scale reference detected — millimetre values unavailable"}
               </p>
+              <div className="mt-2 border-t border-white/10 pt-2">
+                <p className="font-semibold text-white mb-1">Set a real scale:</p>
+                <p className="text-[10px] text-white/60 mb-1">
+                  Put a known-size object in the frame (a ruler or printed reference), then enter its
+                  real width and the pixels it spans. Millimetres become measured instead of assumed.
+                </p>
+                <div className="flex items-center gap-1">
+                  <input
+                    aria-label="Reference width in millimetres"
+                    inputMode="decimal"
+                    value={manualScaleMm}
+                    onChange={(e) => setManualScaleMm(e.target.value)}
+                    placeholder="mm"
+                    className="w-14 rounded bg-white/10 px-1 py-0.5 text-[10px] text-white placeholder:text-white/40"
+                  />
+                  <input
+                    aria-label="Reference span in pixels"
+                    inputMode="decimal"
+                    value={manualScalePx}
+                    onChange={(e) => setManualScalePx(e.target.value)}
+                    placeholder="px"
+                    className="w-14 rounded bg-white/10 px-1 py-0.5 text-[10px] text-white placeholder:text-white/40"
+                  />
+                  <button
+                    type="button"
+                    onClick={applyManualScale}
+                    className="rounded bg-cyan-600/80 px-2 py-0.5 text-[10px] text-white"
+                  >
+                    Apply
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearManualScale}
+                    className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-white/80"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <p className="text-[10px] text-white/50 mt-1">
+                  {manualScaleLabel
+                    ? `Active: ${manualScaleLabel}`
+                    : "Active: anatomical estimate (iris → interpupillary → face width)"}
+                </p>
+              </div>
+
               <p className="text-[10px] text-white/70 mt-1">
                 Data quality: {qualityLabel(analysis.report.quality)}
                 {analysis.report.quality?.gate === "insufficient"

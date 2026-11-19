@@ -13,6 +13,11 @@ import { analyze } from "../client/src/lib/dsd";
 import type { CalibrationScale, FacialFrame } from "../client/src/lib/dsd";
 import { classify } from "../client/src/lib/dsdEvidence";
 import type { Landmark } from "../client/src/lib/dentalNet";
+import {
+  calibrationFromMmPerPixel,
+  manualCalibration,
+  toMillimetres,
+} from "../client/src/lib/clinicalScale";
 
 /* ------------------------------------------------------------------ fixture */
 
@@ -327,6 +332,36 @@ check("degenerate frames do not throw", () => {
     profile: "clinician",
   });
   assert.ok(Number.isFinite(collapsed.score ?? 0) || collapsed.score === null);
+});
+
+/* 16. A clinician-entered reference upgrades assumed millimetres to measured. */
+check("manual calibration converts a known reference to mm per pixel", () => {
+  const cal = manualCalibration(10, 100);
+  assert.ok(cal, "10 mm over 100 px is a plausible scale");
+  assert.equal(cal.mmPerPixel, 0.1);
+  assert.equal(toMillimetres(100, cal), 10);
+  assert.equal(cal.method, "manual");
+  assert.ok(cal.confidence > 0.9, "a clinician reference outranks the anatomical estimate");
+  assert.match(cal.label, /10\.0 mm/);
+});
+
+check("manual calibration rejects unusable references", () => {
+  assert.equal(manualCalibration(0, 100), null);
+  assert.equal(manualCalibration(10, 0), null);
+  assert.equal(manualCalibration(-10, 100), null);
+  assert.equal(manualCalibration(Number.NaN, 100), null);
+  assert.equal(manualCalibration(10, Number.POSITIVE_INFINITY), null);
+  assert.equal(manualCalibration(0.01, 100), null, "0.0001 mm/px is implausible");
+  assert.equal(manualCalibration(500, 100), null, "5 mm/px is implausible");
+});
+
+check("direct mm-per-pixel entry obeys the same plausibility band", () => {
+  const cal = calibrationFromMmPerPixel(0.08);
+  assert.ok(cal);
+  assert.equal(cal.mmPerPixel, 0.08);
+  assert.equal(calibrationFromMmPerPixel(0), null);
+  assert.equal(calibrationFromMmPerPixel(Number.NaN), null);
+  assert.equal(calibrationFromMmPerPixel(3), null);
 });
 
 console.log(`\n${passed} checks passed`);
