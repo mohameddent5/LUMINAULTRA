@@ -16,6 +16,7 @@
  */
 import { foreshorteningFactor } from "./poseDepth";
 import type { PoseEstimate } from "./poseDepth";
+import type { CaptureQuality } from "./captureQuality";
 
 export type FrameGrade = "measurement-grade" | "screening-grade" | "refused";
 
@@ -50,6 +51,11 @@ export interface FuseInput {
   teethCount: number;
   /** True when a usable millimetre calibration exists. */
   calibrated: boolean;
+  /**
+   * Pixel-level verdict from captureQuality.ts. Optional so existing callers
+   * keep working; when supplied, a failed gate blocks measurement grade.
+   */
+  capture?: CaptureQuality | null;
 }
 
 const clamp01 = (v: number) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
@@ -65,6 +71,7 @@ const clamp01 = (v: number) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v))
 export function fuseFrame(input: FuseInput): FusedFrame {
   const { pose, teethCount, calibrated } = input;
   const onnxDepthAvailable = input.onnxDepthAvailable === true;
+  const capture = input.capture ?? null;
 
   const reasons: string[] = [];
 
@@ -98,6 +105,13 @@ export function fuseFrame(input: FuseInput): FusedFrame {
 
   if (!calibrated) reasons.push("no millimetre calibration");
 
+  // A blurry, dim or distant frame cannot carry a measurement even when the
+  // pose and calibration look fine, so its reasons are surfaced here too.
+  const captureOk = capture === null ? true : capture.acceptable;
+  if (capture !== null && !capture.acceptable) {
+    for (const reason of capture.reasons) reasons.push(reason);
+  }
+
   const signals: FusedSignal[] = [
     {
       id: "pose",
@@ -129,13 +143,18 @@ export function fuseFrame(input: FuseInput): FusedFrame {
   ];
 
   const measurementGrade =
-    pose.measurementGrade && calibrated && teethAvailable && pose.reliability >= 0.3;
+    pose.measurementGrade &&
+    calibrated &&
+    teethAvailable &&
+    pose.reliability >= 0.3 &&
+    captureOk;
 
   const confidence = clamp01(
     poseQuality *
       (calibrated ? 1 : 0.55) *
       (teethAvailable ? 1 : 0.5) *
-      (onnxDepthAvailable ? 1 : 0.85),
+      (onnxDepthAvailable ? 1 : 0.85) *
+      (capture === null ? 1 : 0.4 + 0.6 * clamp01(capture.score)),
   );
 
   return {
