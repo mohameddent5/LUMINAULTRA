@@ -1354,6 +1354,18 @@ A millimetre value is only 'measured' when the scale came from a known size.
 Iris, interpupillary and face-width scales are population averages and are
 reported as 'assumed', never as measurements.
 
+═══ METRIC LEDGER (value · provenance · ±1σ) ═══
+${analysis.report.metrics
+  .map(
+    (m) =>
+      `• ${m.label}: ${m.text}${
+        m.available
+          ? ` · ${m.provenance}${m.sigma !== null ? ` · ±${m.sigma.toFixed(2)} ${m.unit}` : ""}${m.calibrationSource ? ` · scale: ${m.calibrationSource}` : ""}`
+          : ` · withheld: ${m.reason ?? "insufficient visual evidence"}`
+      }`,
+  )
+  .join("\n")}
+
 ═══ SMILE CLASSIFICATION ═══
 ${analysis.classificationNotes}
 
