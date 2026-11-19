@@ -54,6 +54,29 @@ export interface FacialFrame {
   points: readonly FacialPoint[];
 }
 
+/**
+ * How a value was obtained. The UI must render this next to every number, so a
+ * reader can never mistake a population-average estimate for a measurement.
+ *
+ *   observed  read directly off the image or the segmentation mask
+ *   measured  computed against a *known* physical size (marker, manual entry)
+ *   inferred  computed from landmark geometry that needs no physical scale
+ *             (angles, ratios, percentages)
+ *   assumed   depends on a population-average constant (iris 11.7 mm,
+ *             interpupillary 63 mm, face width 140 mm)
+ *   unknown   not available on this frame
+ */
+export type Provenance = "observed" | "measured" | "inferred" | "assumed" | "unknown";
+
+/** Bumped whenever a metric definition or its arithmetic changes. */
+export const ALGORITHM_VERSION = "dsd-core/2.0.0";
+
+/** Reason sentinel: this frame cannot support this measurement. */
+export const INSUFFICIENT_VISUAL_EVIDENCE = "INSUFFICIENT_VISUAL_EVIDENCE";
+
+/** A calibration label that names a *known* size rather than a population mean. */
+const KNOWN_SCALE = /marker|manual|known-size|caliper|ruler/i;
+
 export interface MetricResult {
   id: string;
   label: string;
@@ -67,12 +90,18 @@ export interface MetricResult {
   sigma: number | null;
   available: boolean;
   reason?: string;
+  /** How the value was obtained; never guessed by the renderer. */
+  provenance: Provenance;
+  /** Named scale source behind a millimetre value; null when none was used. */
+  calibrationSource: string | null;
   /** True when the evidence band edge is the paper's extrapolation. */
   derivedBand: boolean;
   grade: MetricEvidence["grade"];
   refs: readonly number[];
   idealText: string;
   note: string;
+  /** Version of the arithmetic that produced this value. */
+  algorithmVersion: string;
 }
 
 export interface DsdReport {
@@ -407,6 +436,17 @@ export function analyze(input: AnalyzeInput): DsdReport {
     const available = (options.available ?? numeric) && plausible;
     const band: Band = options.bandOverride ?? (available ? classify(value, bandRange) : "unavailable");
     const relative = calibrated && calibration ? 0.043 / Math.max(0.4, Math.min(1, calibration.confidence)) : 0;
+    // Provenance is derived from *how* the number was produced, never from how
+    // good it looks. A millimetre value is only "measured" when the scale came
+    // from a known physical size; every iris/IPD/face-width scale is a
+    // population average, so it is labelled "assumed" even at high confidence.
+    const provenance: Provenance = !available
+      ? "unknown"
+      : evidence.unit === "mm"
+        ? calibration && KNOWN_SCALE.test(calibration.source)
+          ? "measured"
+          : "assumed"
+        : "inferred";
     results.push({
       id,
       label: evidence.label,
@@ -421,11 +461,15 @@ export function analyze(input: AnalyzeInput): DsdReport {
         : check && !check.ok
           ? check.reason
           : (options.reason ?? NO_TEETH),
+      provenance,
+      calibrationSource:
+        available && evidence.unit === "mm" ? (calibration?.source ?? null) : null,
       derivedBand: bandRange?.derived === true,
       grade: evidence.grade,
       refs: evidence.refs,
       idealText: evidence.idealText,
       note: evidence.note,
+      algorithmVersion: ALGORITHM_VERSION,
     });
   };
 
