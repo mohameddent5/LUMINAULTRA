@@ -46,11 +46,13 @@ export default function PatientArchive() {
     const report = `PATIENT SMILE ANALYSIS REPORT
 Date: ${patient.date}
 Patient: ${patient.patientName}
-Harmony Score: ${patient.harmony}/100
+Prioritisation index: ${patient.harmony}/100
+  (ranks the component metrics for this capture; not a clinical grade
+   and not comparable between patients)
 
 MEASUREMENTS:
 ${Object.entries(patient.measurements)
-  .map(([k, v]) => `${k}: ${v.toFixed(1)}`)
+  .map(([k, v]) => `${k}: ${Number.isFinite(v) ? v.toFixed(1) : "n/a"}`)
   .join("\n")}
 
 CLINICAL NOTES:

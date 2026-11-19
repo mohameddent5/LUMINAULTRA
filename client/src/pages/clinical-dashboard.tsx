@@ -22,7 +22,9 @@ export default function ClinicalDashboard() {
 
     setRecentAnalyses(archive.slice(-5).reverse());
 
-    const avgHarmony = archive.length > 0 ? (archive.reduce((sum: number, p: any) => sum + p.harmony, 0) / archive.length).toFixed(0) : "—";
+    // Stored as `harmony` by the scanner; it is a prioritisation index over the
+    // component metrics, not a clinical grade, so it is labelled as such.
+    const avgIndex = archive.length > 0 ? (archive.reduce((sum: number, p: any) => sum + (Number(p.harmony) || 0), 0) / archive.length).toFixed(0) : "—";
 
     setStats([
       {
@@ -38,8 +40,8 @@ export default function ClinicalDashboard() {
         color: "from-purple-600 to-purple-400",
       },
       {
-        label: "Avg. Harmony Score",
-        value: `${avgHarmony}/100`,
+        label: "Avg. scan index",
+        value: `${avgIndex}/100`,
         icon: <TrendingUp className="w-6 h-6" />,
         color: "from-green-600 to-green-400",
       },
@@ -139,7 +141,6 @@ export default function ClinicalDashboard() {
                 { title: "Golden Proportion", spec: "1.618:1:0.618" },
                 { title: "W/L Ratio Target", spec: "78% (ideal range 65-80%)" },
                 { title: "Gingival Symmetry", spec: ">85% bilateral match" },
-                { title: "Smile Convexity", spec: "Smooth arc (>70 score)" },
                 { title: "VDO Ratio", spec: "43-45% lower facial height" },
                 { title: "Smile Arc", spec: "Follows lower lip contour" },
               ].map((item, i) => (
