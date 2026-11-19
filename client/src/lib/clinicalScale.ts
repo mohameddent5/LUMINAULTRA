@@ -22,7 +22,7 @@ export const IRIS_DIAMETER_MM = 11.7;
 export const INTERPUPILLARY_MM = 63;
 export const BIZYGOMATIC_MM = 140;
 
-export type CalibrationMethod = "iris" | "interpupillary" | "face-width";
+export type CalibrationMethod = "iris" | "interpupillary" | "face-width" | "manual";
 
 export interface Calibration {
   /** Millimetres represented by one pixel at the face plane. */
@@ -84,6 +84,43 @@ const build = (
   label,
   note,
 });
+
+/**
+ * Build a calibration from a scale the clinician measured themselves, e.g. a
+ * ruler or a printed reference card held in the frame. Returns null when the
+ * inputs cannot describe a plausible scale, so a typo can never silently
+ * produce confident-looking millimetres.
+ */
+export function manualCalibration(
+  referenceMm: number,
+  referencePixels: number,
+): Calibration | null {
+  if (!Number.isFinite(referenceMm) || !Number.isFinite(referencePixels)) return null;
+  if (referenceMm <= 0 || referencePixels <= 0) return null;
+  const mmPerPixel = referenceMm / referencePixels;
+  if (!isPlausible(mmPerPixel)) return null;
+  return {
+    mmPerPixel,
+    method: "manual",
+    confidence: 0.98,
+    referencePixels,
+    label: `clinician reference (${referenceMm.toFixed(1)} mm)`,
+    note: `Scale set by the clinician from a ${referenceMm.toFixed(1)} mm reference spanning ${referencePixels.toFixed(0)} px. This overrides the anatomical estimate and should be used when a known-size object is in the frame.`,
+  };
+}
+
+/** Build a calibration directly from a millimetre-per-pixel factor. */
+export function calibrationFromMmPerPixel(mmPerPixel: number): Calibration | null {
+  if (!isPlausible(mmPerPixel)) return null;
+  return {
+    mmPerPixel,
+    method: "manual",
+    confidence: 0.98,
+    referencePixels: 1 / mmPerPixel,
+    label: "clinician scale (mm/px)",
+    note: `Scale entered directly by the clinician (${mmPerPixel.toFixed(4)} mm per pixel). Overrides the anatomical estimate.`,
+  };
+}
 
 /**
  * Estimate the millimetre-per-pixel scale of the face plane.
