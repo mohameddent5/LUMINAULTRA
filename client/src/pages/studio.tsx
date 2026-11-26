@@ -845,7 +845,9 @@ export default function Studio() {
   const [burstMsg, setBurstMsg] = useState("");
   const [caseId, setCaseId] = useState("");
   const sourceRef = useRef<"file" | "camera-single" | "camera-burst">("file");
-  const shapeOk = !!engine && engine.teeth.length >= 4 && engine.medianSolidity >= 0.9 && !!quality && quality.signals.find((x) => x.id === "sharpness")!.ok;
+  // merged neighbours (very wide blobs) or slivers (very flat blobs) mean the outlines are not real single teeth
+  const shapesPlausible = !!engine && engine.teeth.every((t) => t.bw / t.bh <= 1.3 && t.bw / t.bh >= 0.2) && Math.max(...engine.teeth.map((t) => t.area)) <= 2.2 * engine.medianArea;
+  const shapeOk = !!engine && engine.teeth.length >= 4 && engine.medianSolidity >= 0.9 && shapesPlausible && !!quality && quality.signals.find((x) => x.id === "sharpness")!.ok;
 
   useEffect(() => {
     document.documentElement.lang = lang;
@@ -1768,7 +1770,7 @@ export default function Studio() {
                         <li>
                           {t.outlineQ}: {engine ? Math.round(engine.medianSolidity * 100) + "%" : "-"}
                         </li>
-                        <li>Shape tools: {shapeOk ? "enabled (at least 4 clear teeth, outlines solid, photo sharp)" : "refused (needs at least 4 clear teeth, median outline quality 90% or more, and a sharp photo)"}</li>
+                        <li>Shape tools: {shapeOk ? "enabled (at least 4 clear single teeth, outlines solid, photo sharp)" : "refused (needs at least 4 clear single teeth with no merged or sliver outlines, median outline quality 90% or more, and a sharp photo)"}</li>
                         <li>Measured values: {quality.signals.map((x) => `${x.label} ${Number.isFinite(x.value) ? Math.round(x.value * 10) / 10 : "-"}`).join(", ")}</li>
                         <li>Basis: 2D pixel analysis of this one photo. Not verified against measured clinical landmarks. The thresholds are not yet calibrated on real phone photos.</li>
                         <li>Use: a visual preview to talk with the patient. Not a diagnosis, and not a treatment plan.</li>
