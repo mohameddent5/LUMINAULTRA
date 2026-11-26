@@ -12,6 +12,12 @@ declare module "http" {
   }
 }
 
+app.use((_req, res, next) => {
+  // cross-origin isolation lets the in-browser model use several CPU threads
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
+  next();
+});
 app.use(
   express.json({
     limit: "25mb",

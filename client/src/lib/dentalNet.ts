@@ -56,7 +56,9 @@ export function configureOrt(): void {
   ort.env.wasm.wasmPaths = "/ort/";
   // Single-threaded avoids the SharedArrayBuffer requirement, which would need
   // COOP/COEP headers the static host does not send.
-  ort.env.wasm.numThreads = 1;
+  // Threads need SharedArrayBuffer, i.e. cross-origin isolation (the server sends COOP/COEP).
+  // Without it (older Safari) we stay single-threaded.
+  ort.env.wasm.numThreads = typeof crossOriginIsolated !== "undefined" && crossOriginIsolated ? Math.max(1, Math.min(4, navigator.hardwareConcurrency || 1, 2 * 0 + 2, (window as any).__ortThreads || 4)) : 1;
   ort.env.wasm.simd = true;
   ort.env.logLevel = "error";
   ortConfigured = true;
