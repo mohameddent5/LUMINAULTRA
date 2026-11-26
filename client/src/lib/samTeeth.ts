@@ -44,6 +44,8 @@ export interface SamTeeth {
   boxes: { x0: number; x1: number; y0: number; y1: number }[];
   /** merged left/right tooth borders, canvas px, sorted */
   borders: number[];
+  /** lower-arch tooth boxes (below the upper row), canvas px; analysis only, not drawn */
+  lowerBoxes: { x0: number; x1: number; y0: number; y1: number }[];
   ms: number;
 }
 
@@ -253,5 +255,10 @@ export async function samTeeth(
     else groups.push([x]);
   }
   const borders = groups.map((g) => g.reduce((a, b) => a + b, 0) / g.length);
-  return { labels, w: canvas.width, h: canvas.height, count: teeth.length, boxes, borders, ms: performance.now() - t0 };
+  const upBottom = teeth.reduce((a, t) => a + t.y1, 0) / teeth.length;
+  const lowerBoxes = keep
+    .filter((k) => okShape(k) && k.lum > lt * 0.8 && k.red < rt * 1.2 && !teeth.includes(k) && k.cy > upBottom - 0.1 * bigH && k.y0 > upBottom - 0.35 * bigH)
+    .map((t) => ({ x0: rx + t.x0 / (sc * Q), x1: rx + t.x1 / (sc * Q), y0: ry + t.y0 / (sc * Q), y1: ry + t.y1 / (sc * Q) }))
+    .sort((a, b) => a.x0 - b.x0);
+  return { labels, w: canvas.width, h: canvas.height, count: teeth.length, boxes, lowerBoxes, borders, ms: performance.now() - t0 };
 }
