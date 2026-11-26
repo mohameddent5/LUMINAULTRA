@@ -32,17 +32,12 @@ const SECTIONS: NavSection[] = [
     title: "Workspace",
     items: [
       { href: "/", label: "Smile Studio", icon: Sparkles, hint: "Guided chair-side flow" },
-      { href: "/workspace", label: "Workspace", icon: Home, hint: "Overview" },
-      { href: "/care-journey", label: "Screening to care", icon: Activity, hint: "Referral, booking, follow-up" },
-      { href: "/clinical-dashboard", label: "Clinical dashboard", icon: LayoutDashboard, hint: "Practice activity" },
     ],
   },
   {
-    title: "Clinical tools",
+    title: "Planning",
     items: [
-      { href: "/scanner", label: "AR scanner", icon: Camera, hint: "Live facial analysis" },
       { href: "/treatment-planner", label: "Treatment planner", icon: ClipboardList, hint: "Design the smile" },
-      { href: "/smile-simulator", label: "Smile simulator", icon: Sparkles, hint: "Before and after" },
       { href: "/prescription-generator", label: "Lab prescription", icon: FileText, hint: "Send to the lab" },
     ],
   },
@@ -64,18 +59,13 @@ const SECTIONS: NavSection[] = [
 ];
 
 const PAGE_META: Record<string, { title: string; subtitle: string }> = {
-  "/workspace": { title: "Workspace", subtitle: "Your clinical workspace" },
-  "/care-journey": { title: "Screening to care", subtitle: "From a screening result to completed care" },
-  "/clinical-dashboard": { title: "Clinical dashboard", subtitle: "Practice activity and standards" },
-  "/scanner": { title: "AR scanner", subtitle: "Live facial and smile analysis" },
   "/treatment-planner": { title: "Treatment planner", subtitle: "Design and compare treatment options" },
-  "/smile-simulator": { title: "Smile simulator", subtitle: "Preview the planned outcome" },
   "/prescription-generator": { title: "Lab prescription", subtitle: "Prepare instructions for the laboratory" },
   "/patient-archive": { title: "Patient archive", subtitle: "Stored analyses and reports" },
   "/patient-comparison": { title: "Compare patients", subtitle: "Side-by-side measurement review" },
   "/clinical-guidelines": { title: "DSD guidelines", subtitle: "Protocols and reference ranges" },
   "/validation": { title: "Validation", subtitle: "Evidence, accuracy and limits" },
-  "/model": { title: "Model", subtitle: "On-device models and weights" },
+  
   "/settings": { title: "Settings", subtitle: "Clinic profile and data controls" },
 };
 
@@ -87,8 +77,8 @@ function isActive(path: string, href: string): boolean {
 function Brand() {
   return (
     <Link href="/" className="flex items-center gap-3 group">
-      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-[0_0_20px_rgba(0,212,255,0.25)]">
-        <span className="text-sm font-bold text-primary-foreground">Lm</span>
+      <div className="w-10 h-10 rounded-lg bg-primary/20 border border-primary/40 flex items-center justify-center">
+        <span className="text-sm font-bold text-primary">Lm</span>
       </div>
       <div className="leading-tight">
         <p className="font-heading font-bold text-white text-sm">
@@ -143,7 +133,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const meta = PAGE_META[path] ?? { title: "Lumina Ultra", subtitle: "Clinical DSD platform" };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-accent/5 text-foreground">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:w-64 border-r border-white/10 bg-card/40 backdrop-blur-sm">
         <div className="h-16 flex items-center px-4 border-b border-white/10">
@@ -152,7 +142,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <NavList path={path} />
         <div className="p-3 border-t border-white/10 space-y-2">
           <div className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
+            <span className="w-2 h-2 rounded-full bg-emerald-300" />
             <div className="min-w-0">
               <p className="text-[11px] font-medium text-white truncate">Clinical workspace</p>
               <p className="text-[10px] text-muted-foreground">Saved to your account · v1.0</p>
@@ -201,13 +191,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="hidden sm:flex items-center gap-2">
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground border border-white/10 rounded-full px-2.5 py-1">
-              v1.0 design aid
+              assistive design aid
             </span>
             <Link
-              href="/care-journey"
+              href="/"
               className="text-xs font-semibold rounded-lg px-3 py-2 bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
             >
-              New screening
+              New smile design
             </Link>
           </div>
         </header>

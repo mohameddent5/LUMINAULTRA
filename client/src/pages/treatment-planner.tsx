@@ -164,9 +164,9 @@ export default function TreatmentPlanner() {
           </>
         ) : (
           <div className="text-center py-20 space-y-4 text-muted-foreground">
-            <p>No patients to plan. Create a patient analysis first.</p>
-            <Button onClick={() => navigate("/scanner")} className="bg-primary hover:bg-primary/90 mt-4">
-              Open AR Scanner
+            <p>No patients to plan. Run a design in Smile Studio first.</p>
+            <Button onClick={() => navigate("/")} className="bg-primary hover:bg-primary/90 mt-4">
+              Open Smile Studio
             </Button>
           </div>
         )}

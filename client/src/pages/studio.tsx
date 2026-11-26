@@ -1448,14 +1448,14 @@ export default function Studio() {
 
   /* look and feel */
   const fs = big ? "text-xl" : "text-lg";
-  const bg = hc ? "bg-black text-white" : "bg-gradient-to-b from-[#0b1220] to-[#111c33] text-slate-100";
+  const bg = hc ? "bg-black text-white" : "bg-[#111827] text-slate-100";
   const card = hc ? "border-2 border-white bg-black" : "border border-white/15 bg-white/5";
   const muted = hc ? "text-white" : "text-slate-300";
   const btnBase =
-    "min-h-[56px] px-6 rounded-2xl font-semibold inline-flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-4 focus-visible:ring-yellow-300 disabled:opacity-40 disabled:cursor-not-allowed transition-transform active:scale-[0.98]";
-  const primary = `${btnBase} ${hc ? "bg-yellow-300 text-black" : "bg-cyan-400 text-slate-900 hover:bg-cyan-300"}`;
+    "min-h-[56px] px-6 rounded-2xl font-semibold inline-flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-4 focus-visible:ring-amber-200 disabled:opacity-40 disabled:cursor-not-allowed transition-transform active:scale-[0.98]";
+  const primary = `${btnBase} ${hc ? "bg-amber-200 text-black" : "bg-sky-300 text-slate-900 hover:bg-sky-200"}`;
   const ghost = `${btnBase} ${hc ? "border-2 border-white text-white" : "border border-white/25 text-white hover:bg-white/10"}`;
-  const iconBtn = `min-h-[44px] min-w-[44px] px-3 rounded-xl inline-flex items-center justify-center gap-1.5 text-sm focus:outline-none focus-visible:ring-4 focus-visible:ring-yellow-300 ${
+  const iconBtn = `min-h-[44px] min-w-[44px] px-3 rounded-xl inline-flex items-center justify-center gap-1.5 text-sm focus:outline-none focus-visible:ring-4 focus-visible:ring-amber-200 ${
     hc ? "border-2 border-white" : "border border-white/20 hover:bg-white/10"
   }`;
 
@@ -1467,7 +1467,7 @@ export default function Studio() {
     <div className={`min-h-screen ${bg} ${fs}`} data-testid="studio">
       <header className="sticky top-0 z-20 backdrop-blur bg-black/40 border-b border-white/10 px-3 sm:px-6 pr-16 py-2 flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-2 me-auto">
-          <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-yellow-300 text-slate-900 font-bold flex items-center justify-center">
+          <span className="w-10 h-10 rounded-xl bg-sky-300/20 border border-sky-300/40 text-sky-200 font-bold flex items-center justify-center">
             <Sparkles className="w-5 h-5" aria-hidden />
           </span>
           <span className="font-bold text-xl">{t.brand}</span>
@@ -1488,7 +1488,7 @@ export default function Studio() {
           <FolderOpen className="w-4 h-4" aria-hidden />
           <span className="hidden md:inline">{t.archive}</span>
         </Link>
-        <Link href="/workspace" className={iconBtn}>
+        <Link href="/treatment-planner" className={iconBtn}>
           {t.tools}
         </Link>
       </header>
@@ -1501,7 +1501,7 @@ export default function Studio() {
               <li key={s} className="flex-1" aria-current={i === step ? "step" : undefined}>
                 <div
                   className={`h-2 rounded-full ${
-                    i <= step ? (hc ? "bg-yellow-300" : "bg-cyan-400") : hc ? "bg-white/30" : "bg-white/15"
+                    i <= step ? (hc ? "bg-amber-200" : "bg-sky-300") : hc ? "bg-white/30" : "bg-white/15"
                   }`}
                 />
                 <p className={`mt-1 text-sm ${i === step ? "font-bold text-white" : muted}`}>{s}</p>
@@ -1529,7 +1529,7 @@ export default function Studio() {
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t.p1NamePh}
                 autoComplete="off"
-                className="w-full min-h-[56px] rounded-xl px-4 bg-black/40 border-2 border-white/30 focus:border-cyan-300 focus:outline-none text-white placeholder:text-slate-400"
+                className="w-full min-h-[56px] rounded-xl px-4 bg-black/40 border-2 border-white/30 focus:border-sky-200 focus:outline-none text-white placeholder:text-slate-400"
               />
             </div>
             <div className={`rounded-2xl p-5 ${card}`}>
@@ -1545,12 +1545,12 @@ export default function Studio() {
                     setConsent(e.target.checked);
                     consentAt.current = e.target.checked ? new Date().toISOString() : null;
                   }}
-                  className="mt-1 w-8 h-8 shrink-0 accent-cyan-400"
+                  className="mt-1 w-8 h-8 shrink-0 accent-sky-300"
                 />
                 <span className={muted}>{t.p1Consent}</span>
               </label>
               <p className={`mt-4 text-base ${muted}`}>{t.p1Assist}</p>
-              {!consent && <p className="mt-3 text-base text-yellow-300">{t.p1Need}</p>}
+              {!consent && <p className="mt-3 text-base text-amber-200">{t.p1Need}</p>}
             </div>
           </section>
         )}
@@ -1581,7 +1581,7 @@ export default function Studio() {
                   role="status"
                   aria-live="polite"
                   className={`rounded-xl p-3 font-semibold text-center ${
-                    live?.ok ? "bg-emerald-400 text-black" : "bg-yellow-300 text-black"
+                    live?.ok ? "bg-emerald-300 text-black" : "bg-amber-200 text-black"
                   }`}
                 >
                   {burstMsg || live?.text || t.reading}
@@ -1605,7 +1605,7 @@ export default function Studio() {
               </div>
             ) : busy ? (
               <div className={`rounded-2xl p-10 text-center ${card}`} role="status">
-                <div className="mx-auto mb-4 w-12 h-12 rounded-full border-4 border-cyan-300 border-t-transparent animate-spin" />
+                <div className="mx-auto mb-4 w-12 h-12 rounded-full border-4 border-sky-200 border-t-transparent animate-spin" />
                 {t.reading}
               </div>
             ) : (
@@ -1632,7 +1632,7 @@ export default function Studio() {
               </div>
             )}
             {camError && (
-              <p role="alert" className="text-yellow-300">
+              <p role="alert" className="text-amber-200">
                 {t.cameraError}
               </p>
             )}
@@ -1700,7 +1700,7 @@ export default function Studio() {
                 style={{ left: `${split}%` }}
               >
                 <div className="absolute inset-y-0 w-1 bg-white shadow" />
-                <div className="relative w-12 h-12 rounded-full bg-white text-slate-900 flex items-center justify-center shadow-lg group-focus-visible:ring-4 ring-yellow-300 font-bold">
+                <div className="relative w-12 h-12 rounded-full bg-white text-slate-900 flex items-center justify-center shadow-lg group-focus-visible:ring-4 ring-amber-200 font-bold">
                   ⇄
                 </div>
               </div>
@@ -1710,12 +1710,12 @@ export default function Studio() {
             {step === 2 && (
               <>
                 {analysis?.close && (
-                  <p role="status" className="rounded-xl p-3 bg-cyan-300 text-black font-semibold">
+                  <p role="status" className="rounded-xl p-3 bg-sky-200 text-black font-semibold">
                     {t.tapTooth}
                   </p>
                 )}
                 {analysis && !analysis.auto && (
-                  <p role="status" className="rounded-xl p-3 bg-yellow-300 text-black font-semibold">
+                  <p role="status" className="rounded-xl p-3 bg-amber-200 text-black font-semibold">
                     {t.tapMouth}
                   </p>
                 )}
@@ -1724,8 +1724,8 @@ export default function Studio() {
                     role="status"
                     className={`rounded-2xl p-4 border-2 ${
                       quality.acceptable
-                        ? hc ? "border-white" : "border-emerald-400/70 bg-emerald-400/10"
-                        : hc ? "border-yellow-300" : "border-yellow-300/80 bg-yellow-300/10"
+                        ? hc ? "border-white" : "border-emerald-300/70 bg-emerald-300/10"
+                        : hc ? "border-amber-200" : "border-amber-200/80 bg-amber-200/10"
                     }`}
                   >
                     <p className="font-bold flex items-center gap-2">
@@ -1737,7 +1737,7 @@ export default function Studio() {
                       {quality.acceptable ? t.relGood : t.relLow}
                       <span
                         className={`ms-auto rounded-full px-3 py-1 text-base font-bold ${
-                          tier === "A" ? "bg-emerald-400 text-black" : tier === "B" ? "bg-yellow-300 text-black" : "bg-red-400 text-black"
+                          tier === "A" ? "bg-emerald-300 text-black" : tier === "B" ? "bg-amber-200 text-black" : "bg-red-300 text-black"
                         }`}
                       >
                         {tier}
@@ -1804,8 +1804,8 @@ export default function Studio() {
                           aria-checked={on}
                           disabled={off}
                           onClick={() => choosePreset(k)}
-                          className={`rounded-2xl overflow-hidden text-start focus:outline-none focus-visible:ring-4 focus-visible:ring-yellow-300 disabled:opacity-40 ${
-                            on ? (hc ? "border-4 border-yellow-300" : "border-4 border-cyan-400") : hc ? "border-2 border-white" : "border-2 border-white/20"
+                          className={`rounded-2xl overflow-hidden text-start focus:outline-none focus-visible:ring-4 focus-visible:ring-amber-200 disabled:opacity-40 ${
+                            on ? (hc ? "border-4 border-amber-200" : "border-4 border-sky-300") : hc ? "border-2 border-white" : "border-2 border-white/20"
                           }`}
                         >
                           <div className="aspect-[4/3] bg-black/40">
@@ -1822,7 +1822,7 @@ export default function Studio() {
                       );
                     })}
                   </div>
-                  {!shapeOk && <p className="text-yellow-300 text-base">{t.optRefused}</p>}
+                  {!shapeOk && <p className="text-amber-200 text-base">{t.optRefused}</p>}
                 </div>
 
                 <div className={`rounded-2xl p-5 space-y-4 ${card}`}>
@@ -1836,11 +1836,11 @@ export default function Studio() {
                           role="radio"
                           aria-checked={on}
                           onClick={() => setLevel(l.level)}
-                          className={`min-h-[64px] rounded-2xl font-bold text-xl focus:outline-none focus-visible:ring-4 focus-visible:ring-yellow-300 ${
+                          className={`min-h-[64px] rounded-2xl font-bold text-xl focus:outline-none focus-visible:ring-4 focus-visible:ring-amber-200 ${
                             on
                               ? hc
-                                ? "bg-yellow-300 text-black"
-                                : "bg-cyan-400 text-slate-900"
+                                ? "bg-amber-200 text-black"
+                                : "bg-sky-300 text-slate-900"
                               : hc
                                 ? "border-2 border-white"
                                 : "border border-white/25 hover:bg-white/10"
@@ -1866,7 +1866,7 @@ export default function Studio() {
                         value={Math.round(level * 100)}
                         onChange={(e) => setLevel(Number(e.target.value) / 100)}
                         aria-valuetext={levelWord}
-                        className="flex-1 h-10 accent-cyan-400"
+                        className="flex-1 h-10 accent-sky-300"
                       />
                       <span className="text-sm w-20">{t.strong}</span>
                     </div>
@@ -1913,7 +1913,7 @@ export default function Studio() {
                 {showGuides && <p className={`text-base ${muted}`}>{t.guideLegend}</p>}
                 <div className={`rounded-2xl p-5 space-y-3 ${card}`} data-solidity={engine ? engine.medianSolidity.toFixed(2) : ""} data-teeth={engine ? engine.teeth.length : 0}>
                   <h2 className="font-semibold">{t.shapeTitle}</h2>
-                  {!shapeOk && <p className="text-yellow-300 text-base">{t.shapeRefused}</p>}
+                  {!shapeOk && <p className="text-amber-200 text-base">{t.shapeRefused}</p>}
                   <div className="grid sm:grid-cols-3 gap-3">
                     {[
                       { k: "smooth", on: smooth, set: setSmooth, label: t.smooth, hint: t.smoothHint },
@@ -1931,8 +1931,8 @@ export default function Studio() {
                           x.set(!x.on);
                           if (x.k !== "guides") setPreset(null);
                         }}
-                        className={`min-h-[72px] rounded-2xl px-3 py-2 text-start focus:outline-none focus-visible:ring-4 focus-visible:ring-yellow-300 disabled:opacity-40 ${
-                          x.on ? (hc ? "bg-yellow-300 text-black" : "bg-cyan-400 text-slate-900") : hc ? "border-2 border-white" : "border border-white/25 hover:bg-white/10"
+                        className={`min-h-[72px] rounded-2xl px-3 py-2 text-start focus:outline-none focus-visible:ring-4 focus-visible:ring-amber-200 disabled:opacity-40 ${
+                          x.on ? (hc ? "bg-amber-200 text-black" : "bg-sky-300 text-slate-900") : hc ? "border-2 border-white" : "border border-white/25 hover:bg-white/10"
                         }`}
                       >
                         <span className="block font-bold text-lg">

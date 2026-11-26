@@ -155,10 +155,10 @@ Contact: [Contact Information]`;
           </>
         ) : (
           <div className="text-center py-20 space-y-4 text-muted-foreground">
-            <p>No patients to prescribe. Create a patient analysis first.</p>
+            <p>No patients to prescribe. Run a design in Smile Studio first.</p>
             <div className="flex flex-wrap items-center justify-center gap-3 mt-4">
-              <Button onClick={() => navigate("/scanner")} className="bg-primary hover:bg-primary/90">
-                Open AR Scanner
+              <Button onClick={() => navigate("/")} className="bg-primary hover:bg-primary/90">
+                Open Smile Studio
               </Button>
               <Button
                 variant="outline"

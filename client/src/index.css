@@ -12,21 +12,21 @@
   --radius-lg: 0.75rem;
 
   /* Lumina Ultra Dark Theme Palette */
-  --color-background: hsl(220 15% 6%);
+  --color-background: hsl(215 16% 10%);
   --color-foreground: hsl(220 10% 90%);
 
-  --color-card: hsl(220 15% 10%);
+  --color-card: hsl(215 15% 13%);
   --color-card-foreground: hsl(220 10% 90%);
 
-  --color-popover: hsl(220 15% 10%);
+  --color-popover: hsl(215 15% 13%);
   --color-popover-foreground: hsl(220 10% 90%);
 
   /* Cyan - Action / Midlines */
-  --color-primary: hsl(180 100% 50%);
-  --color-primary-foreground: hsl(220 15% 6%);
+  --color-primary: hsl(199 55% 62%);
+  --color-primary-foreground: hsl(215 25% 10%);
 
   /* Yellow - Reference Lines */
-  --color-secondary: hsl(50 100% 50%);
+  --color-secondary: hsl(38 35% 68%);
   --color-secondary-foreground: hsl(220 15% 6%);
 
   --color-muted: hsl(220 15% 16%);
@@ -40,7 +40,7 @@
 
   --color-border: hsl(220 15% 16%);
   --color-input: hsl(220 15% 16%);
-  --color-ring: hsl(180 100% 50%);
+  --color-ring: hsl(199 55% 62%);
 }
 
 @layer base {
@@ -57,7 +57,7 @@
 
 @layer utilities {
   .text-glow {
-    text-shadow: 0 0 10px hsla(180, 100%, 50%, 0.5);
+    text-shadow: none;
   }
   .glass-panel {
     @apply bg-black/40 backdrop-blur-md border border-white/10;
