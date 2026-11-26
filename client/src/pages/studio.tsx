@@ -799,6 +799,30 @@ function drawGuides(
   if (!engine || !region) return;
   const lw = Math.max(2, o.width / 400);
   if (showGuides) {
+    // one outline per tooth, plus each upper tooth's width as a share of the widest one
+    const upAll = engine.teeth.filter((t) => t.incisalDown).sort((a, b) => a.cx - b.cx);
+    const widest = Math.max(1, ...upAll.map((t) => t.bw));
+    g.fillStyle = "rgba(56,189,248,0.95)";
+    for (const t of engine.teeth) {
+      const W = t.own.width, H = t.own.height, a = t.own.data;
+      for (let y = 0; y < H; y++)
+        for (let x = 0; x < W; x++) {
+          if (a[(y * W + x) * 4 + 3] < 128) continue;
+          const edge = x === 0 || y === 0 || x === W - 1 || y === H - 1 || a[(y * W + x - 1) * 4 + 3] < 128 || a[(y * W + x + 1) * 4 + 3] < 128 || a[((y - 1) * W + x) * 4 + 3] < 128 || a[((y + 1) * W + x) * 4 + 3] < 128;
+          if (edge) g.fillRect(t.bx + x + region.x0, t.by + y + region.y0, Math.max(1, lw * 0.7), Math.max(1, lw * 0.7));
+        }
+    }
+    g.font = `600 ${Math.max(11, Math.round(o.width / 55))}px sans-serif`;
+    g.textAlign = "center";
+    for (const t of upAll) {
+      const txt = `${Math.round((t.bw / widest) * 100)}%`;
+      const x = t.cx + region.x0, y = t.by + t.bh + region.y0 + Math.max(14, o.width / 45);
+      g.lineWidth = 3;
+      g.strokeStyle = "rgba(0,0,0,0.7)";
+      g.strokeText(txt, x, y);
+      g.fillStyle = "#fff";
+      g.fillText(txt, x, y);
+    }
     const up = engine.teeth.filter((t) => t.incisalDown).sort((a, b) => a.cx - b.cx);
     if (up.length >= 3) {
       const pts = up.map((t) => ({ x: t.cx + region.x0, y: t.by + t.bh + region.y0 }));
@@ -1012,7 +1036,7 @@ export default function Studio() {
     setEnamel(false);
     setEdits({});
     setSel(null);
-    setShowGuides(false);
+    setShowGuides(!!g.sam);
     setPreset("whiten");
     setPhotoVersion((v) => v + 1);
     setCaseId("");
