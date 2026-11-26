@@ -14,6 +14,7 @@ import ClinicalDashboard from "@/pages/clinical-dashboard";
 import Settings from "@/pages/settings";
 import ClinicalGuidelines from "@/pages/clinical-guidelines";
 import PatientComparison from "@/pages/patient-comparison";
+import Annotate from "@/pages/annotate";
 import { AuthGate } from "@/components/AuthGate";
 
 function Router() {
@@ -29,6 +30,7 @@ function Router() {
       <Route path="/settings" component={Settings} />
       <Route path="/clinical-guidelines" component={ClinicalGuidelines} />
       <Route path="/patient-comparison" component={PatientComparison} />
+      <Route path="/annotate" component={Annotate} />
       <Route component={NotFound} />
     </Switch>
   );

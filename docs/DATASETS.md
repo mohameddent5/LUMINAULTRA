@@ -16,3 +16,6 @@ Checked 2026-11-26 from the source pages.
 Attribution: any CC BY dataset later used must be credited here and in the app's About page, with a link to the license and a note of changes.
 
 Model note: `lumina_dental_net.onnx` and `visibility_gate.json` were fit on 1,920 synthetic images only. No real-world accuracy has been measured.
+
+## Private clinic photos (consent stated by the dentist-owner, 2026-11-26)
+Patient photos supplied by the owner are kept off GitHub and outside this repo. They are used only as a private annotation set via /annotate (images never leave the device; only exported point JSON does). They must not be committed, and consent records should be kept by the clinic.

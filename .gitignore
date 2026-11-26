@@ -11,3 +11,8 @@ vite.config.ts.*
 .env.*
 !.env.example
 .local/
+
+# private patient photos and label exports
+/private/
+*.landmarks.json
+landmarks-*.json

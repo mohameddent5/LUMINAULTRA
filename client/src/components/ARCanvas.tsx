@@ -34,6 +34,10 @@ interface DSDMeasurements {
   toothVisibilityAtRest: number;
   smileAnimationPathway: string;
   intercanineWidth: number;
+  /** Tier 1 (face landmarks only): inter-commissure width / inner-lip opening height. */
+  smileIndex: number;
+  /** Tier 1: inner-lip opening height as % of inter-commissure width. */
+  lipOpeningPct: number;
 }
 
 interface AnalysisResult {
@@ -44,15 +48,26 @@ interface AnalysisResult {
   measurementConfidence: Record<string, number>;
   /** true once readings have settled (enough frames, low spread). */
   isStable?: boolean;
+  /** Measurement keys that need tooth detection and are therefore not reported. */
+  notMeasurable?: string[];
   /** set when the face is not in a measurable pose. */
   qualityMessage?: string;
 }
 
 
+/**
+ * Values that cannot be measured from face landmarks. A face mesh sees lips, not teeth, so these are only
+ * lip-shape guesses until a tooth detector supplies real points. They are shown as "not measurable".
+ */
+const TOOTH_DEPENDENT: (keyof DSDMeasurements)[] = [
+  "centralIncisorsWLRatio", "goldenRatioLateral", "goldenRatioCanine", "redProportion", "gingivalSymmetry",
+  "gingivalMarginDev", "caninePositionDev", "toothTilt", "occlusalPlaneCant", "incisorEdgePositions",
+  "midlineDeviation", "intercanineWidth", "smileArcDeviation", "smileConvexityScore", "toothVisibilityAtRest",
+];
+const TOOTH_TEXT = /W\/L|incisor|golden|lateral|gingiv|occlusal|canine|midline|arc|tooth|gummy|smile line|convex|buccal/i;
+
 const CONFIDENCE_LABELS: Record<string, keyof DSDMeasurements> = {
-  "W/L": "centralIncisorsWLRatio", "GR-L": "goldenRatioLateral", "Sym": "gingivalSymmetry",
-  "Cant": "occlusalPlaneCant", "VDO": "verticalDimensionRatio", "Conv": "smileConvexityScore",
-  "RestTooth": "toothVisibilityAtRest", "IcW": "intercanineWidth",
+  "Midline": "facialMidlineDeviation", "VDO": "verticalDimensionRatio", "SmileIdx": "smileIndex", "Lip": "lipOpeningPct",
 };
 
 /** Replace per-frame values with rolling medians and compute real (spread-based) confidence. */
@@ -78,6 +93,8 @@ function stabilizeAnalysis(
   const isStable = st.count("overallHarmony") >= 10 && values.every((c) => c >= 60);
   return {
     ...a,
+    notMeasurable: TOOTH_DEPENDENT as string[],
+    clinicalRecommendations: a.clinicalRecommendations.filter((r) => !TOOTH_TEXT.test(r)),
     measurements: m,
     overallHarmony: st.value("overallHarmony") ?? a.overallHarmony,
     measurementConfidence: confidence,
@@ -203,6 +220,8 @@ export function ARCanvas() {
       toothVisibilityAtRest: 0,
       smileAnimationPathway: "Balanced",
       intercanineWidth: 35,
+      smileIndex: 0,
+      lipOpeningPct: 0,
     };
 
     try {
@@ -354,6 +373,12 @@ export function ARCanvas() {
       // INTERCANINE WIDTH (Distance between canine tips - arch width indicator)
       const leftCanine = landmarks[291]; // Approximate canine
       const rightCanine = landmarks[61]; // Approximate canine
+      {
+        const cw = Math.hypot((landmarks[291].x - landmarks[61].x) * w, (landmarks[291].y - landmarks[61].y) * h);
+        const oh = Math.hypot((landmarks[14].x - landmarks[13].x) * w, (landmarks[14].y - landmarks[13].y) * h);
+        measurements.smileIndex = oh > 1 ? cw / oh : 0;
+        measurements.lipOpeningPct = cw > 1 ? (oh / cw) * 100 : 0;
+      }
       measurements.intercanineWidth = Math.abs(rightCanine.x - leftCanine.x) * w * 0.15; // Approximate in mm scale
     } catch (e) {
       console.error("Measurement calculation error:", e);
@@ -1032,40 +1057,40 @@ End of Report | Lumina Ultra™ v1.0
           <div className="bg-black/40 rounded-lg p-3 space-y-2 text-xs">
             <div className="grid grid-cols-3 gap-2 text-muted-foreground text-xs animate-in fade-in-50">
               <div className="flex flex-col">
-                <span>W/L: {analysis.measurements.centralIncisorsWLRatio.toFixed(0)}%</span>
-                <span className="text-[8px] text-white/40">{analysis.measurementConfidence["W/L"]}% conf</span>
+                <span>W/L: n/m</span>
+                <span className="text-[8px] text-white/40">needs tooth detection</span>
               </div>
               <div className="flex flex-col">
-                <span>GR-L: {analysis.measurements.goldenRatioLateral.toFixed(0)}%</span>
-                <span className="text-[8px] text-white/40">{analysis.measurementConfidence["GR-L"]}% conf</span>
+                <span>GR-L: n/m</span>
+                <span className="text-[8px] text-white/40">needs tooth detection</span>
               </div>
               <div className="flex flex-col">
-                <span>Sym: {analysis.measurements.gingivalSymmetry.toFixed(0)}%</span>
-                <span className="text-[8px] text-white/40">{analysis.measurementConfidence["Sym"]}% conf</span>
+                <span>Sym: n/m</span>
+                <span className="text-[8px] text-white/40">needs tooth detection</span>
               </div>
               <div className="flex flex-col">
-                <span>Cant: {analysis.measurements.occlusalPlaneCant.toFixed(1)}°</span>
-                <span className="text-[8px] text-white/40">{analysis.measurementConfidence["Cant"]}% conf</span>
+                <span>Cant: n/m</span>
+                <span className="text-[8px] text-white/40">needs tooth detection</span>
               </div>
               <div className="flex flex-col">
                 <span>VDO: {analysis.measurements.verticalDimensionRatio.toFixed(0)}%</span>
-                <span className="text-[8px] text-white/40">{analysis.measurementConfidence["VDO"]}% conf</span>
+                <span className="text-[8px] text-white/40">{analysis.measurementConfidence["VDO"] ?? 0}% conf</span>
               </div>
               <div className="flex flex-col">
-                <span>Conv: {analysis.measurements.smileConvexityScore.toFixed(0)}</span>
-                <span className="text-[8px] text-white/40">{analysis.measurementConfidence["Conv"]}% conf</span>
+                <span>Conv: n/m</span>
+                <span className="text-[8px] text-white/40">needs tooth detection</span>
               </div>
               <div className="flex flex-col">
-                <span>Rest: {analysis.measurements.toothVisibilityAtRest.toFixed(0)}%</span>
-                <span className="text-[8px] text-white/40">{analysis.measurementConfidence["RestTooth"]}% conf</span>
+                <span>Rest: n/m</span>
+                <span className="text-[8px] text-white/40">needs tooth detection</span>
               </div>
               <div className="flex flex-col">
                 <span>Path: {analysis.measurements.smileAnimationPathway}</span>
                 <span className="text-[8px] text-white/40">{analysis.measurementConfidence["Pathway"]}% conf</span>
               </div>
               <div className="flex flex-col">
-                <span>IcW: {analysis.measurements.intercanineWidth.toFixed(1)}</span>
-                <span className="text-[8px] text-white/40">{analysis.measurementConfidence["IcW"]}% conf</span>
+                <span>Smile idx: {analysis.measurements.smileIndex.toFixed(1)}</span>
+                <span className="text-[8px] text-white/40">{analysis.measurementConfidence["SmileIdx"] ?? 0}% conf</span>
               </div>
             </div>
             {analysis.measurements.profileAnalysisNeeded && (
