@@ -3,7 +3,7 @@
 Status: plan. Nothing here is implemented in the engine yet.
 
 ## Classes (from the reference annotation)
-Region masks: upper teeth (instance per tooth), lower teeth, gingiva, papillae (points), upper lip, lower lip, mouth opening (dark cavity), tongue, skin/beard (background).
+Region masks: upper teeth (instance per tooth), lower teeth, free gingiva (the collar from the gingival margin to the groove), attached gingiva (the firmer band past the groove, up to the mucogingival line), gingiva overall, papillae (points), upper lip, lower lip, mouth opening (dark cavity), tongue, skin/beard (background).
 Per-tooth curves: mesial border, distal border, incisal edge, cervical margin.
 Points: zenith (gingival apex per tooth), papilla tip, midline.
 Curves: gingiva margin, inner and outer lip borders.
@@ -31,3 +31,8 @@ Wiring: Studio does not yet read this table. Each metric is shown only when the 
 2. Same style on a different mouth, with lower arch: lower incisal line, lower papillae with short vertical tooth-boundary lines, and a midline diastema between the upper centrals (visible gap, dark space behind). Schema implications: lower-arch instances and boundaries; diastema as its own measurable gap (width between the two central mesial borders), already a metric in dsdEvidence.ts; the papilla points must allow a "missing or open" state; the gingiva margin may be absent on posterior teeth.
 The images themselves are private and not stored in the repo.
 3. Wider crop with nose and full lips, a different person and skin tone, low gingival display: the gingiva margin is one dashed line along the lip rather than per-tooth scallops, and teeth are small in frame. Schema implications: the gingiva margin needs a "coarse" mode when zeniths are hard to see; the mouth crop must be found first (the tooth outlines here are about 5 percent of the image width per tooth); skin tone variety must be in any test set before claiming robustness.
+
+## Free vs attached gingiva (hard target)
+Classes: free gingiva region, attached gingiva region, and the boundary line between them (the free gingival groove). The yellow line the user drew is the free gingival margin, the edge of the free gingiva next to the tooth.
+Limits: in a smile photo the groove is a subtle change of texture and shade, often hidden by the upper lip, and many mouths show only a thin free band. Colour alone is unlikely to separate the two.
+Rule: ship only if it passes scoring on held-out labelled photos (boundary distance as a fraction of tooth height, per tooth). Until then the UI says "not detected" for these three classes and shows no guess. Needed from the user: hand labels of the groove on photos where it is visible (a thin line, with "not visible" noted when it is hidden).
