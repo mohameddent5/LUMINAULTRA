@@ -1685,7 +1685,7 @@ export default function Studio() {
                 dragging.current = true;
                 (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
                 const onHandle = !!(e.target as HTMLElement).closest("[role=slider]");
-                const hit = !onHandle && step === 2 ? toothAt(e) : null;
+                const hit: number | null = null;
                 if (hit !== null) {
                   setSel(hit);
                   dragMoves.current = true;
@@ -1874,102 +1874,9 @@ export default function Studio() {
                       );
                     })}
                   </div>
-                  <div>
-                    <label htmlFor="fine" className="block mb-2 text-base font-semibold">
-                      {t.fine}: {levelWord}
-                    </label>
-                    <div className="flex items-center gap-3" dir="ltr">
-                      <span className="text-sm w-16 text-end">{t.subtle}</span>
-                      <input
-                        id="fine"
-                        type="range"
-                        min={0}
-                        max={100}
-                        value={Math.round(level * 100)}
-                        onChange={(e) => setLevel(Number(e.target.value) / 100)}
-                        aria-valuetext={levelWord}
-                        className="flex-1 h-10 accent-sky-300"
-                      />
-                      <span className="text-sm w-20">{t.strong}</span>
-                    </div>
-                  </div>
                 </div>
 
-                {shapeOk && sel === null && <p className={`text-base ${muted}`}>{t.tapTeeth}</p>}
-                {sel !== null && (
-                  <div className={`rounded-2xl p-5 space-y-3 ${card}`} role="group" aria-label={t.editTitle}>
-                    <h2 className="font-semibold">{t.editTitle}</h2>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {([
-                        [t.longer, "len", 1],
-                        [t.shorter, "len", -1],
-                        [t.wider, "wid", 1],
-                        [t.narrower, "wid", -1],
-                        [t.turnL, "rot", -1],
-                        [t.turnR, "rot", 1],
-                      ] as [string, keyof ToothEdit, number][]).map(([label, k, d]) => (
-                        <button key={label} className={ghost} onClick={() => bump(k, d)}>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex gap-3 flex-wrap">
-                      <button
-                        className={ghost}
-                        onClick={() => {
-                          setEdits((m) => {
-                            const n = { ...m };
-                            delete n[sel];
-                            return n;
-                          });
-                        }}
-                      >
-                        {t.resetTooth}
-                      </button>
-                      <button className={primary} onClick={() => setSel(null)}>
-                        {t.done}
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {showGuides && <p className={`text-base ${muted}`}>{t.guideLegend}</p>}
-                <div className={`rounded-2xl p-5 space-y-3 ${card}`} data-solidity={engine ? engine.medianSolidity.toFixed(2) : ""} data-teeth={engine ? engine.teeth.length : 0}>
-                  <h2 className="font-semibold">{t.shapeTitle}</h2>
-                  {!shapeOk && <p className="text-amber-200 text-base">{t.shapeRefused}</p>}
-                  <div className="grid sm:grid-cols-3 gap-3">
-                    {[
-                      { k: "smooth", on: smooth, set: setSmooth, label: t.smooth, hint: t.smoothHint },
-                      { k: "straighten", on: straighten, set: setStraighten, label: t.straighten, hint: t.straightenHint },
-                      { k: "balance", on: balance, set: setBalance, label: t.balance, hint: t.balanceHint },
-                      { k: "enamel", on: enamel, set: setEnamel, label: t.natural_depth, hint: t.natural_depthHint },
-                      { k: "guides", on: showGuides, set: setShowGuides, label: t.guides, hint: t.guidesHint },
-                    ].map((x) => (
-                      <button
-                        key={x.k}
-                        role="switch"
-                        aria-checked={x.on}
-                        disabled={!shapeOk}
-                        onClick={() => {
-                          x.set(!x.on);
-                          if (x.k !== "guides") setPreset(null);
-                        }}
-                        className={`min-h-[72px] rounded-2xl px-3 py-2 text-start focus:outline-none focus-visible:ring-4 focus-visible:ring-amber-200 disabled:opacity-40 ${
-                          x.on ? (hc ? "bg-amber-200 text-black" : "bg-sky-700 text-white") : hc ? "border-2 border-white" : "border border-white/25 hover:bg-white/10"
-                        }`}
-                      >
-                        <span className="block font-bold text-lg">
-                          {x.on && <Check className="inline w-5 h-5 me-1" aria-hidden />}
-                          {x.label}
-                        </span>
-                        <span className="block text-sm opacity-90">{x.hint}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <button className={ghost} onClick={rotate}>
-                    <RefreshCw className="w-5 h-5" aria-hidden />
-                    {t.rotate}
-                  </button>
-                </div>
+                {!shapeOk && <p role="status" className="rounded-xl p-3 bg-amber-200 text-black font-semibold">{t.shapeRefused}</p>}
 
                 <div className={`rounded-2xl p-5 ${card}`}>
                   <h2 className="font-semibold mb-2">{t.notes}</h2>
