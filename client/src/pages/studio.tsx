@@ -1453,7 +1453,7 @@ export default function Studio() {
   const muted = hc ? "text-white" : "text-slate-300";
   const btnBase =
     "min-h-[56px] px-6 rounded-2xl font-semibold inline-flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-4 focus-visible:ring-amber-200 disabled:opacity-40 disabled:cursor-not-allowed transition-transform active:scale-[0.98]";
-  const primary = `${btnBase} ${hc ? "bg-amber-200 text-black" : "bg-sky-300 text-slate-900 hover:bg-sky-200"}`;
+  const primary = `${btnBase} ${hc ? "bg-amber-200 text-black" : "bg-sky-700 text-white hover:bg-sky-600"}`;
   const ghost = `${btnBase} ${hc ? "border-2 border-white text-white" : "border border-white/25 text-white hover:bg-white/10"}`;
   const iconBtn = `min-h-[44px] min-w-[44px] px-3 rounded-xl inline-flex items-center justify-center gap-1.5 text-sm focus:outline-none focus-visible:ring-4 focus-visible:ring-amber-200 ${
     hc ? "border-2 border-white" : "border border-white/20 hover:bg-white/10"
@@ -1487,9 +1487,6 @@ export default function Studio() {
         <Link href="/patient-archive" className={iconBtn} aria-label={t.archive}>
           <FolderOpen className="w-4 h-4" aria-hidden />
           <span className="hidden md:inline">{t.archive}</span>
-        </Link>
-        <Link href="/treatment-planner" className={iconBtn}>
-          {t.tools}
         </Link>
       </header>
 
@@ -1710,7 +1707,7 @@ export default function Studio() {
             {step === 2 && (
               <>
                 {analysis?.close && (
-                  <p role="status" className="rounded-xl p-3 bg-sky-200 text-black font-semibold">
+                  <p role="status" className="rounded-xl p-3 bg-sky-900/40 border border-sky-300/30 text-sky-100 font-medium">
                     {t.tapTooth}
                   </p>
                 )}
@@ -1840,7 +1837,7 @@ export default function Studio() {
                             on
                               ? hc
                                 ? "bg-amber-200 text-black"
-                                : "bg-sky-300 text-slate-900"
+                                : "bg-sky-700 text-white"
                               : hc
                                 ? "border-2 border-white"
                                 : "border border-white/25 hover:bg-white/10"
@@ -1932,7 +1929,7 @@ export default function Studio() {
                           if (x.k !== "guides") setPreset(null);
                         }}
                         className={`min-h-[72px] rounded-2xl px-3 py-2 text-start focus:outline-none focus-visible:ring-4 focus-visible:ring-amber-200 disabled:opacity-40 ${
-                          x.on ? (hc ? "bg-amber-200 text-black" : "bg-sky-300 text-slate-900") : hc ? "border-2 border-white" : "border border-white/25 hover:bg-white/10"
+                          x.on ? (hc ? "bg-amber-200 text-black" : "bg-sky-700 text-white") : hc ? "border-2 border-white" : "border border-white/25 hover:bg-white/10"
                         }`}
                       >
                         <span className="block font-bold text-lg">

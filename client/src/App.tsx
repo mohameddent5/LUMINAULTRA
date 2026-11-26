@@ -15,13 +15,10 @@ import { AuthGate } from "@/components/AuthGate";
  * download the scanner, the simulator and the ONNX model plumbing before a
  * judge sees anything — each workspace loads when it is opened.
  */
-const TreatmentPlanner = lazy(() => import("@/pages/treatment-planner"));
 const PatientArchive = lazy(() => import("@/pages/patient-archive"));
-const PrescriptionGenerator = lazy(() => import("@/pages/prescription-generator"));
 const Settings = lazy(() => import("@/pages/settings"));
 const ClinicalGuidelines = lazy(() => import("@/pages/clinical-guidelines"));
 const Validation = lazy(() => import("@/pages/validation"));
-const PatientComparison = lazy(() => import("@/pages/patient-comparison"));
 const Annotate = lazy(() => import("@/pages/annotate"));
 
 function RouteFallback() {
@@ -39,13 +36,10 @@ function Router() {
   return (
     <Suspense fallback={<RouteFallback />}>
       <Switch>
-        <Route path="/treatment-planner" component={TreatmentPlanner} />
         <Route path="/patient-archive" component={PatientArchive} />
-        <Route path="/prescription-generator" component={PrescriptionGenerator} />
         <Route path="/settings" component={Settings} />
         <Route path="/clinical-guidelines" component={ClinicalGuidelines} />
         <Route path="/validation" component={Validation} />
-        <Route path="/patient-comparison" component={PatientComparison} />
         <Route path="/annotate" component={Annotate} />
         <Route component={NotFound} />
       </Switch>

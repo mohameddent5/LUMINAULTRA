@@ -35,17 +35,9 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: "Planning",
-    items: [
-      { href: "/treatment-planner", label: "Treatment planner", icon: ClipboardList, hint: "Design the smile" },
-      { href: "/prescription-generator", label: "Lab prescription", icon: FileText, hint: "Send to the lab" },
-    ],
-  },
-  {
     title: "Records",
     items: [
       { href: "/patient-archive", label: "Patient archive", icon: FolderOpen, hint: "Stored analyses" },
-      { href: "/patient-comparison", label: "Compare patients", icon: GitCompare, hint: "Side by side" },
     ],
   },
   {
@@ -59,10 +51,7 @@ const SECTIONS: NavSection[] = [
 ];
 
 const PAGE_META: Record<string, { title: string; subtitle: string }> = {
-  "/treatment-planner": { title: "Treatment planner", subtitle: "Design and compare treatment options" },
-  "/prescription-generator": { title: "Lab prescription", subtitle: "Prepare instructions for the laboratory" },
   "/patient-archive": { title: "Patient archive", subtitle: "Stored analyses and reports" },
-  "/patient-comparison": { title: "Compare patients", subtitle: "Side-by-side measurement review" },
   "/clinical-guidelines": { title: "DSD guidelines", subtitle: "Protocols and reference ranges" },
   "/validation": { title: "Validation", subtitle: "Evidence, accuracy and limits" },
   
@@ -205,7 +194,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <main className="flex-1 min-w-0">{children}</main>
 
         <footer className="border-t border-white/10 px-4 sm:px-6 py-4 flex flex-col sm:flex-row gap-1 sm:items-center sm:justify-between text-[11px] text-muted-foreground">
-          <p>Lumina Ultra — Clinical DSD platform · measurements validated against peer-reviewed protocols</p>
+          <p>Lumina Ultra — Clinical DSD platform · assistive design preview</p>
           <p>Clinical decision support, not a diagnosis. Data is saved to your clinic account.</p>
         </footer>
       </div>
