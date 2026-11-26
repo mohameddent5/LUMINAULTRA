@@ -57,7 +57,7 @@ export function setupAuth(app: Express) {
     resave: false,
     saveUninitialized: false,
     store,
-    cookie: { httpOnly: true, sameSite: "lax", secure: prod, maxAge: 1000 * 60 * 60 * 24 * 14 },
+    cookie: { httpOnly: true, sameSite: "lax", secure: prod && process.env.COOKIE_INSECURE !== "1", maxAge: 1000 * 60 * 60 * 24 * 14 },
   }));
   app.use(passport.initialize());
   app.use(passport.session());

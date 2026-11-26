@@ -22,6 +22,8 @@ export interface Tooth {
   area: number;
   /** tilt of the long axis away from vertical, radians (+ = clockwise); 0 if the tooth is too round to tell */
   tilt: number;
+  /** true when the incisal (biting) edge is the bottom of the tooth (upper teeth in an upright photo) */
+  incisalDown: boolean;
   /** own area / convex hull area: low means a ragged or fragmented mask */
   solidity: number;
   bx: number;
@@ -45,11 +47,58 @@ export interface TeethEngine {
   medianSolidity: number;
 }
 
+export interface ToothEdit {
+  /** steps: each step is about 6 percent */
+  len: number;
+  wid: number;
+  /** steps: each step is about 2 degrees */
+  rot: number;
+}
+
 export interface ShapeOptions {
   level: number;
   smooth: boolean;
   straighten: boolean;
   balance: boolean;
+  /** translucent incisal edge and warmer neck, so teeth do not look flat */
+  enamel?: boolean;
+  edits?: Record<number, ToothEdit>;
+}
+
+/** Layered enamel: warmer and a little denser at the neck, cooler and more translucent at the biting edge. */
+function enamelShade(img: ImageData, t: Tooth, level: number) {
+  const d = img.data;
+  const { width: w, height: h } = img;
+  const k0 = Math.min(1, 0.5 + level * 0.6);
+  for (let y = 0; y < h; y++) {
+    const v0 = y / Math.max(1, h - 1);
+    const v = t.incisalDown ? v0 : 1 - v0; // 0 neck, 1 biting edge
+    const warm = Math.max(0, 1 - v * 2.2) * 0.5 * k0;
+    const t0 = Math.min(1, Math.max(0, (v - 0.68) / 0.32));
+    const trans = t0 * t0 * (3 - 2 * t0) * 0.42 * k0;
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const m = d[i + 3] / 255;
+      if (m < 0.05) continue;
+      let r = d[i], g = d[i + 1], b = d[i + 2];
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      // neck: a touch warmer and a little deeper
+      r += 7 * warm;
+      g += 2 * warm;
+      b -= 7 * warm;
+      const dn = 1 - 0.05 * warm;
+      r *= dn; g *= dn; b *= dn;
+      // edge: pull toward a cool grey-blue and let a little of the dark mouth show through
+      const tr = lum * 0.9, tg = lum * 0.96, tb = lum * 1.04 + 6;
+      r += (tr - r) * trans;
+      g += (tg - g) * trans;
+      b += (tb - b) * trans;
+      const dark = 1 - 0.1 * trans;
+      d[i] = r * dark;
+      d[i + 1] = g * dark;
+      d[i + 2] = b * dark;
+    }
+  }
 }
 
 const N4 = [
@@ -399,6 +448,7 @@ export function segmentTeeth(region: RegionLike): TeethEngine | null {
       area: n,
       tilt,
       solidity,
+      incisalDown: true,
       bx,
       by,
       bw,
@@ -408,6 +458,10 @@ export function segmentTeeth(region: RegionLike): TeethEngine | null {
     });
   }
   if (!teeth.length) return null;
+  const meanY = teeth.reduce((a, t) => a + t.cy, 0) / teeth.length;
+  const spreadY = Math.max(...teeth.map((t) => t.cy)) - Math.min(...teeth.map((t) => t.cy));
+  // Only call teeth "lower" when the photo really shows two rows.
+  for (const t of teeth) t.incisalDown = spreadY < h * 0.18 ? true : t.cy <= meanY;
   return {
     w,
     h,
@@ -454,6 +508,7 @@ export function renderTeeth(eng: TeethEngine, out: CanvasRenderingContext2D, x0:
     const src = o.smooth ? t.full : t.own;
     const img = new ImageData(new Uint8ClampedArray(src.data), src.width, src.height);
     whitenInPlace(img.data, o.level);
+    if (o.enamel) enamelShade(img, t, o.level);
     tc.width = t.bw;
     tc.height = t.bh;
     tc.getContext("2d")!.putImageData(img, 0, 0);
@@ -470,6 +525,16 @@ export function renderTeeth(eng: TeethEngine, out: CanvasRenderingContext2D, x0:
     rx.rotate(rot);
     rx.scale(sc, sc);
     rx.translate(-t.cx, -t.cy);
+    const ed = o.edits?.[t.id];
+    if (ed && (ed.len || ed.wid || ed.rot)) {
+      // length and width change from the neck, so the biting edge moves, not the gum line
+      const ax = t.cx;
+      const ay = t.incisalDown ? t.by : t.by + t.bh;
+      rx.translate(ax, ay);
+      rx.rotate((ed.rot * 2 * Math.PI) / 180);
+      rx.scale(1 + ed.wid * 0.06, 1 + ed.len * 0.06);
+      rx.translate(-ax, -ay);
+    }
     rx.drawImage(tc, t.bx, t.by);
     rx.restore();
   }

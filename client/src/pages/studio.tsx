@@ -18,7 +18,8 @@ import {
   Type,
   UserRound,
 } from "lucide-react";
-import { segmentTeeth, renderTeeth, whitenInPlace, type TeethEngine } from "@/lib/smileEngine";
+import { segmentTeeth, renderTeeth, whitenInPlace, type TeethEngine, type ToothEdit, type ShapeOptions } from "@/lib/smileEngine";
+import { jpegToPdf } from "@/lib/pdf";
 import { evaluateCapture, type CaptureQuality } from "@/lib/captureQuality";
 
 /* ------------------------------------------------------------------ text */
@@ -71,6 +72,41 @@ const T = {
     foundMouth: "Smile found.",
     retake: "Retake photo",
     levelOf: ["Very subtle", "Natural", "Fresh", "Bright", "Very bright"],
+    optTitle: "Compare options",
+    optWhiten: "Whitening",
+    optWhitenHint: "Colour only",
+    optBond: "Bonding",
+    optBondHint: "Repairs edges, natural shine",
+    optVeneer: "Veneers style",
+    optVeneerHint: "Edges, alignment, sizes, bright",
+    optRefused: "Bonding and veneers previews need a clear, sharp photo with separate teeth.",
+    natural_depth: "Natural depth",
+    natural_depthHint: "Translucent edges, warmer necks",
+    guides: "Show guides",
+    guidesHint: "Midline and edge curve",
+    guideLegend: "Cyan dashed: dental midline. White: smooth edge curve. Yellow: current edge line.",
+    tapTeeth: "Tap a tooth to adjust it.",
+    editTitle: "Adjust this tooth",
+    longer: "Longer",
+    shorter: "Shorter",
+    wider: "Wider",
+    narrower: "Narrower",
+    turnL: "Turn left",
+    turnR: "Turn right",
+    resetTooth: "Reset tooth",
+    done: "Done",
+    replay: "Replay reveal",
+    report: "Patient report (PDF)",
+    reportShare: "Share report",
+    tierA: "Preview confidence A: every check passed and enough clear teeth were found.",
+    tierB: "Preview confidence B: usable with care. Some checks are borderline.",
+    tierC: "Preview confidence C: a rough idea only. Do not rely on the shape tools.",
+    clinician: "Clinician details",
+    chipOk: "passed",
+    chipNo: "not passed",
+    teethFound: "Separate teeth found",
+    outlineQ: "Outline quality",
+    offline: "Works offline once installed (add to home screen).",
     shapeTitle: "Shape tools",
     smooth: "Smooth edges",
     smoothHint: "Closes chips and uneven edges",
@@ -163,6 +199,41 @@ const T = {
     foundMouth: "تم إيجاد الابتسامة.",
     retake: "إعادة التقاط",
     levelOf: ["هادئ جداً", "طبيعي", "منتعش", "ناصع", "ناصع جداً"],
+    optTitle: "Compare options",
+    optWhiten: "Whitening",
+    optWhitenHint: "Colour only",
+    optBond: "Bonding",
+    optBondHint: "Repairs edges, natural shine",
+    optVeneer: "Veneers style",
+    optVeneerHint: "Edges, alignment, sizes, bright",
+    optRefused: "Bonding and veneers previews need a clear, sharp photo with separate teeth.",
+    natural_depth: "Natural depth",
+    natural_depthHint: "Translucent edges, warmer necks",
+    guides: "Show guides",
+    guidesHint: "Midline and edge curve",
+    guideLegend: "Cyan dashed: dental midline. White: smooth edge curve. Yellow: current edge line.",
+    tapTeeth: "Tap a tooth to adjust it.",
+    editTitle: "Adjust this tooth",
+    longer: "Longer",
+    shorter: "Shorter",
+    wider: "Wider",
+    narrower: "Narrower",
+    turnL: "Turn left",
+    turnR: "Turn right",
+    resetTooth: "Reset tooth",
+    done: "Done",
+    replay: "Replay reveal",
+    report: "Patient report (PDF)",
+    reportShare: "Share report",
+    tierA: "Preview confidence A: every check passed and enough clear teeth were found.",
+    tierB: "Preview confidence B: usable with care. Some checks are borderline.",
+    tierC: "Preview confidence C: a rough idea only. Do not rely on the shape tools.",
+    clinician: "Clinician details",
+    chipOk: "passed",
+    chipNo: "not passed",
+    teethFound: "Separate teeth found",
+    outlineQ: "Outline quality",
+    offline: "Works offline once installed (add to home screen).",
     shapeTitle: "Shape tools",
     smooth: "Smooth edges",
     smoothHint: "Closes chips and uneven edges",
@@ -587,6 +658,125 @@ async function sha256(c: HTMLCanvasElement): Promise<string> {
   return Array.from(new Uint8Array(h)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+type PresetKey = "whiten" | "bonding" | "veneers";
+const PRESETS: Record<PresetKey, { level: number; smooth: boolean; straighten: boolean; balance: boolean; enamel: boolean }> = {
+  whiten: { level: 0.6, smooth: false, straighten: false, balance: false, enamel: false },
+  bonding: { level: 0.4, smooth: true, straighten: false, balance: false, enamel: true },
+  veneers: { level: 0.85, smooth: true, straighten: true, balance: true, enamel: true },
+};
+
+function paintAfter(
+  o: HTMLCanvasElement,
+  out: HTMLCanvasElement,
+  region: Region | null,
+  engine: TeethEngine | null,
+  opt: ShapeOptions,
+) {
+  const hasEdits = !!opt.edits && Object.values(opt.edits).some((e) => e.len || e.wid || e.rot);
+  if (engine && region && (opt.smooth || opt.straighten || opt.balance || opt.enamel || hasEdits)) {
+    out.width = o.width;
+    out.height = o.height;
+    const ctx = out.getContext("2d")!;
+    ctx.drawImage(o, 0, 0);
+    renderTeeth(engine, ctx, region.x0, region.y0, opt);
+  } else renderAfter(o, out, region, opt.level);
+}
+
+function drawGuides(
+  cv: HTMLCanvasElement,
+  o: HTMLCanvasElement,
+  region: Region | null,
+  engine: TeethEngine | null,
+  showGuides: boolean,
+  selected: number | null,
+) {
+  cv.width = o.width;
+  cv.height = o.height;
+  const g = cv.getContext("2d")!;
+  g.clearRect(0, 0, cv.width, cv.height);
+  if (!engine || !region) return;
+  const lw = Math.max(2, o.width / 400);
+  if (showGuides) {
+    const up = engine.teeth.filter((t) => t.incisalDown).sort((a, b) => a.cx - b.cx);
+    if (up.length >= 3) {
+      const pts = up.map((t) => ({ x: t.cx + region.x0, y: t.by + t.bh + region.y0 }));
+      // least squares parabola y = a x^2 + b x + c
+      const n = pts.length;
+      let sx = 0, sx2 = 0, sx3 = 0, sx4 = 0, sy = 0, sxy = 0, sx2y = 0;
+      const mx = pts.reduce((a, p) => a + p.x, 0) / n;
+      for (const p of pts) {
+        const x = p.x - mx;
+        sx += x; sx2 += x * x; sx3 += x ** 3; sx4 += x ** 4; sy += p.y; sxy += x * p.y; sx2y += x * x * p.y;
+      }
+      // solve 3x3
+      const M = [
+        [sx4, sx3, sx2, sx2y],
+        [sx3, sx2, sx, sxy],
+        [sx2, sx, n, sy],
+      ];
+      for (let i = 0; i < 3; i++) {
+        let piv = i;
+        for (let k = i + 1; k < 3; k++) if (Math.abs(M[k][i]) > Math.abs(M[piv][i])) piv = k;
+        [M[i], M[piv]] = [M[piv], M[i]];
+        if (Math.abs(M[i][i]) < 1e-9) continue;
+        for (let k = 0; k < 3; k++) {
+          if (k === i) continue;
+          const f = M[k][i] / M[i][i];
+          for (let c = i; c < 4; c++) M[k][c] -= f * M[i][c];
+        }
+      }
+      const A = M[0][3] / M[0][0] || 0, B = M[1][3] / M[1][1] || 0, C = M[2][3] / M[2][2] || 0;
+      g.lineWidth = lw;
+      g.strokeStyle = "#fde047";
+      g.beginPath();
+      pts.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)));
+      g.stroke();
+      g.strokeStyle = "#ffffff";
+      g.setLineDash([lw * 4, lw * 3]);
+      g.beginPath();
+      const xa = pts[0].x - 10, xb = pts[pts.length - 1].x + 10;
+      for (let x = xa; x <= xb; x += 6) {
+        const y = A * (x - mx) ** 2 + B * (x - mx) + C;
+        x === xa ? g.moveTo(x, y) : g.lineTo(x, y);
+      }
+      g.stroke();
+      g.setLineDash([]);
+    }
+    // dental midline between the two most central teeth
+    const all = [...engine.teeth].sort((a, b) => a.cx - b.cx);
+    if (all.length >= 2) {
+      const med = all.reduce((a, t) => a + t.cx, 0) / all.length;
+      let best = 0;
+      for (let i = 0; i < all.length - 1; i++) {
+        if (Math.abs((all[i].cx + all[i + 1].cx) / 2 - med) < Math.abs((all[best].cx + all[best + 1].cx) / 2 - med)) best = i;
+      }
+      const mxl = (all[best].cx + all[best + 1].cx) / 2 + region.x0;
+      g.strokeStyle = "#22d3ee";
+      g.lineWidth = lw;
+      g.setLineDash([lw * 5, lw * 4]);
+      g.beginPath();
+      g.moveTo(mxl, region.y0);
+      g.lineTo(mxl, region.y0 + region.h);
+      g.stroke();
+      g.setLineDash([]);
+    }
+  }
+  if (selected !== null) {
+    const t = engine.teeth.find((x) => x.id === selected);
+    if (t) {
+      g.strokeStyle = "#22d3ee";
+      g.lineWidth = lw * 1.5;
+      g.strokeRect(t.bx + region.x0 - 2, t.by + region.y0 - 2, t.bw + 4, t.bh + 4);
+    }
+  }
+}
+
+function tierOf(q: CaptureQuality | null, e: TeethEngine | null): "A" | "B" | "C" {
+  if (!q || !q.acceptable) return "C";
+  if (e && e.teeth.length >= 6 && e.medianSolidity >= 0.92) return "A";
+  return "B";
+}
+
 const LOOKS = [
   { key: "natural", level: 0.35 },
   { key: "fresh", level: 0.6 },
@@ -627,6 +817,15 @@ export default function Studio() {
   const [smooth, setSmooth] = useState(false);
   const [straighten, setStraighten] = useState(false);
   const [balance, setBalance] = useState(false);
+  const [enamel, setEnamel] = useState(false);
+  const [edits, setEdits] = useState<Record<number, ToothEdit>>({});
+  const [sel, setSel] = useState<number | null>(null);
+  const [showGuides, setShowGuides] = useState(false);
+  const [preset, setPreset] = useState<PresetKey | null>(null);
+  const [thumbs, setThumbs] = useState<Partial<Record<PresetKey, string>>>({});
+  const [photoVersion, setPhotoVersion] = useState(0);
+  const guideRef = useRef<HTMLCanvasElement>(null);
+  const revealed = useRef(0);
   const [live, setLive] = useState<{ ok: boolean; text: string } | null>(null);
   const [burstMsg, setBurstMsg] = useState("");
   const [caseId, setCaseId] = useState("");
@@ -690,6 +889,12 @@ export default function Studio() {
     setSmooth(false);
     setStraighten(false);
     setBalance(false);
+    setEnamel(false);
+    setEdits({});
+    setSel(null);
+    setShowGuides(false);
+    setPreset("whiten");
+    setPhotoVersion((v) => v + 1);
     setCaseId("");
     void sha256(g.c).then((h) => setCaseId(h.slice(0, 10)));
   }, []);
@@ -819,17 +1024,84 @@ export default function Studio() {
     beforeShow.current.width = o.width;
     beforeShow.current.height = o.height;
     beforeShow.current.getContext("2d")!.drawImage(o, 0, 0);
-    if (engine && region && (smooth || straighten || balance)) {
-      const out = afterRef.current;
-      out.width = o.width;
-      out.height = o.height;
-      const ctx = out.getContext("2d")!;
-      ctx.drawImage(o, 0, 0);
-      renderTeeth(engine, ctx, region.x0, region.y0, { level, smooth, straighten, balance });
-    } else renderAfter(o, afterRef.current, region, level);
-  }, [step, region, level, hasPhoto, engine, smooth, straighten, balance]);
+    paintAfter(o, afterRef.current, region, engine, { level, smooth, straighten, balance, enamel, edits });
+    if (guideRef.current) drawGuides(guideRef.current, o, region, engine, showGuides, sel);
+  }, [step, region, level, hasPhoto, engine, smooth, straighten, balance, enamel, edits, showGuides, sel]);
+
+  /* option previews (whitening / bonding / veneers style) */
+  useEffect(() => {
+    const o = originalRef.current;
+    if (step !== 2 || !o || !region) return;
+    const next: Partial<Record<PresetKey, string>> = {};
+    const tmp = document.createElement("canvas");
+    (Object.keys(PRESETS) as PresetKey[]).forEach((k) => {
+      if (k !== "whiten" && !shapeOk) return;
+      paintAfter(o, tmp, region, engine, { ...PRESETS[k] });
+      next[k] = thumb(tmp, 360);
+    });
+    setThumbs(next);
+  }, [step, region, engine, shapeOk, photoVersion]);
+
+  const choosePreset = (k: PresetKey) => {
+    const pz = PRESETS[k];
+    setLevel(pz.level);
+    setSmooth(pz.smooth);
+    setStraighten(pz.straighten);
+    setBalance(pz.balance);
+    setEnamel(pz.enamel);
+    setEdits({});
+    setSel(null);
+    setPreset(k);
+  };
+
+  /* animated reveal */
+  const playReveal = useCallback(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      setSplit(50);
+      return;
+    }
+    const t0 = performance.now();
+    const dur = 1600;
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - t0) / dur);
+      const e = 1 - Math.pow(1 - p, 3);
+      setSplit(100 - e * 50);
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    setSplit(100);
+    requestAnimationFrame(tick);
+  }, []);
+  useEffect(() => {
+    if (step === 2 && hasPhoto && revealed.current !== photoVersion) {
+      revealed.current = photoVersion;
+      const id = setTimeout(playReveal, 350);
+      return () => clearTimeout(id);
+    }
+  }, [step, hasPhoto, photoVersion, playReveal]);
 
   const dragMoves = useRef(false);
+  const toothAt = (e: React.PointerEvent<HTMLDivElement>): number | null => {
+    const o = originalRef.current;
+    if (!o || !engine || !region || !shapeOk) return null;
+    const r = e.currentTarget.getBoundingClientRect();
+    const x = Math.round(((e.clientX - r.left) / r.width) * o.width - region.x0);
+    const y = Math.round(((e.clientY - r.top) / r.height) * o.height - region.y0);
+    for (const t of [...engine.teeth].sort((a, b) => a.area - b.area)) {
+      const lx = x - t.bx;
+      const ly = y - t.by;
+      if (lx < 0 || ly < 0 || lx >= t.bw || ly >= t.bh) continue;
+      if (t.own.data[(ly * t.bw + lx) * 4 + 3] > 100) return t.id;
+    }
+    return null;
+  };
+  const bump = (k: keyof ToothEdit, d: number) => {
+    if (sel === null) return;
+    setPreset(null);
+    setEdits((m) => {
+      const cur = m[sel] ?? { len: 0, wid: 0, rot: 0 };
+      return { ...m, [sel]: { ...cur, [k]: Math.max(-6, Math.min(6, cur[k] + d)) } };
+    });
+  };
   const tapSeed = (e: React.PointerEvent<HTMLDivElement>) => {
     const o = originalRef.current;
     if (!o || !analysis) return;
@@ -871,6 +1143,7 @@ export default function Studio() {
     return out;
   }, [analysis, region, t]);
 
+  const tier = tierOf(quality, engine);
   const levelWord = t.levelOf[Math.min(4, Math.floor(level * 5))];
 
   /* compare slider */
@@ -907,8 +1180,167 @@ export default function Studio() {
     x.fillStyle = "#cbd5e1";
     const clinic = clinicName();
     x.fillText(`${clinic ? clinic + "  |  " : ""}Visual preview made by software. Not a guarantee of the final result.`, 18, h + 40);
-    x.fillText(`${quality?.acceptable ? "Capture verified" : "Low-confidence capture"}  |  Consent recorded${caseId ? "  |  Case " + caseId : ""}`, 18, h + 72);
+    x.fillText(`${quality?.acceptable ? "Capture verified" : "Low-confidence capture"} (confidence ${tier})  |  Consent recorded${caseId ? "  |  Case " + caseId : ""}`, 18, h + 72);
     return c;
+  };
+
+  const coverDraw = (x: CanvasRenderingContext2D, im: CanvasImageSource, iw: number, ih: number, dx: number, dy: number, dw: number, dh: number) => {
+    const sc = Math.max(dw / iw, dh / ih);
+    const sw = dw / sc;
+    const sh = dh / sc;
+    x.save();
+    x.beginPath();
+    x.roundRect(dx, dy, dw, dh, 18);
+    x.clip();
+    x.drawImage(im, (iw - sw) / 2, (ih - sh) / 2, sw, sh, dx, dy, dw, dh);
+    x.restore();
+  };
+
+  const wrap = (x: CanvasRenderingContext2D, text: string, mx: number, y: number, maxW: number, lh: number): number => {
+    const words = text.split(" ");
+    let line = "";
+    for (const w of words) {
+      const test = line ? line + " " + w : w;
+      if (x.measureText(test).width > maxW && line) {
+        x.fillText(line, mx, y);
+        y += lh;
+        line = w;
+      } else line = test;
+    }
+    if (line) {
+      x.fillText(line, mx, y);
+      y += lh;
+    }
+    return y;
+  };
+
+  const buildReport = async (): Promise<HTMLCanvasElement | null> => {
+    const o = originalRef.current;
+    const a = afterRef.current;
+    if (!o || !a) return null;
+    const W = 1240, H = 1754, M = 70;
+    const c = document.createElement("canvas");
+    c.width = W;
+    c.height = H;
+    const x = c.getContext("2d")!;
+    x.fillStyle = "#ffffff";
+    x.fillRect(0, 0, W, H);
+    x.fillStyle = "#0b1220";
+    x.fillRect(0, 0, W, 170);
+    x.fillStyle = "#ffffff";
+    x.font = "bold 54px sans-serif";
+    x.fillText("Your smile preview", M, 85);
+    x.font = "28px sans-serif";
+    x.fillStyle = "#67e8f9";
+    const clinic = clinicName();
+    x.fillText(`${clinic || "Dental clinic"}  |  ${new Date().toLocaleDateString()}`, M, 135);
+    x.fillStyle = "#0f172a";
+    x.font = "bold 34px sans-serif";
+    x.fillText(name.trim() || "Patient", M, 235);
+
+    const iw = (W - M * 2 - 30) / 2;
+    const ih = 470;
+    coverDraw(x, o, o.width, o.height, M, 265, iw, ih);
+    coverDraw(x, a, a.width, a.height, M + iw + 30, 265, iw, ih);
+    x.font = "bold 26px sans-serif";
+    x.fillStyle = "#ffffff";
+    x.fillRect(M + 14, 279, 120, 40);
+    x.fillRect(M + iw + 44, 279, 100, 40);
+    x.fillStyle = "#0f172a";
+    x.fillText("Before", M + 26, 308);
+    x.fillText("After", M + iw + 58, 308);
+
+    let y = 265 + ih + 50;
+    const optImgs: [string, string | undefined][] = [
+      ["Whitening", thumbs.whiten],
+      ["Bonding", thumbs.bonding],
+      ["Veneers style", thumbs.veneers],
+    ];
+    if (thumbs.bonding && thumbs.veneers) {
+      x.fillStyle = "#0f172a";
+      x.font = "bold 30px sans-serif";
+      x.fillText("Options we can discuss", M, y);
+      y += 24;
+      const ow = (W - M * 2 - 40) / 3;
+      const oh = 250;
+      for (let i = 0; i < 3; i++) {
+        const [label, src] = optImgs[i];
+        if (!src) continue;
+        const im = await loadImage(src);
+        coverDraw(x, im, im.width, im.height, M + i * (ow + 20), y, ow, oh);
+        x.fillStyle = "#0f172a";
+        x.font = "bold 24px sans-serif";
+        x.fillText(label, M + i * (ow + 20), y + oh + 34);
+      }
+      y += 250 + 80;
+    }
+
+    x.fillStyle = "#0f172a";
+    x.font = "bold 30px sans-serif";
+    x.fillText("What we see", M, y);
+    y += 40;
+    x.font = "26px sans-serif";
+    x.fillStyle = "#334155";
+    for (const n of notes) y = wrap(x, "• " + n, M, y, W - M * 2, 36);
+
+    // record box
+    const by = Math.max(y + 30, 1330);
+    x.fillStyle = "#f1f5f9";
+    x.beginPath();
+    x.roundRect(M, by, W - M * 2, 270, 18);
+    x.fill();
+    x.fillStyle = "#0f172a";
+    x.font = "bold 28px sans-serif";
+    x.fillText("Case record", M + 28, by + 48);
+    x.font = "24px sans-serif";
+    x.fillStyle = "#334155";
+    const used = [smooth && "smooth edges", straighten && "straighten", balance && "balance sizes", enamel && "natural depth", Object.keys(edits).length ? "tooth adjustments" : ""].filter(Boolean).join(", ") || "whitening only";
+    const lines = [
+      `Consent: patient agreement confirmed by the dentist${consentAt.current ? " on " + new Date(consentAt.current).toLocaleString() : ""}`,
+      `Photo capture: ${quality?.acceptable ? "passed all checks" : "did not pass all checks, treat as a rough idea"}. Preview confidence ${tier}.`,
+      `Edits applied: ${used}. Whitening level: ${levelWord.toLowerCase()}.`,
+      `Case ID ${caseId || "-"} | Smile Studio engine 1 | Photo source: ${sourceRef.current}`,
+    ];
+    let ly = by + 88;
+    for (const l of lines) ly = wrap(x, l, M + 28, ly, W - M * 2 - 56, 34);
+
+    x.fillStyle = "#64748b";
+    x.font = "22px sans-serif";
+    wrap(x, "This is a visual preview made by software to help a conversation with your dentist. It is not a diagnosis and does not guarantee the final result. Your dentist reviews every result.", M, H - 100, W - M * 2, 30);
+    return c;
+  };
+
+  const reportPdf = async (): Promise<Blob | null> => {
+    const c = await buildReport();
+    if (!c) return null;
+    const blob: Blob | null = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.9));
+    if (!blob) return null;
+    return jpegToPdf(new Uint8Array(await blob.arrayBuffer()), c.width, c.height, "Smile preview report");
+  };
+
+  const downloadReport = async () => {
+    const b = await reportPdf();
+    if (!b) return;
+    const url = URL.createObjectURL(b);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `smile-report-${caseId || Date.now()}.pdf`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
+
+  const shareReport = async () => {
+    const b = await reportPdf();
+    if (!b) return;
+    const file = new File([b], "smile-report.pdf", { type: "application/pdf" });
+    const nav: any = navigator;
+    if (nav.canShare?.({ files: [file] })) {
+      try {
+        await nav.share({ files: [file], title: t.preview });
+      } catch {
+        /* cancelled */
+      }
+    } else setMsg(t.shareFail);
   };
 
   const download = () => {
@@ -966,7 +1398,9 @@ export default function Studio() {
           capture: quality
             ? { verified: quality.acceptable, reasons: quality.reasons, signals: quality.signals.map((x) => ({ id: x.id, ok: x.ok })) }
             : null,
-          edits: { whiteningLevel: Math.round(level * 100) / 100, smooth, straighten, balance },
+          tier,
+          option: preset,
+          edits: { whiteningLevel: Math.round(level * 100) / 100, smooth, straighten, balance, enamel, tooth: edits },
         },
         notes: "Smile Studio preview",
         clinicalNotes: "",
@@ -1200,7 +1634,11 @@ export default function Studio() {
                 dragging.current = true;
                 (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
                 const onHandle = !!(e.target as HTMLElement).closest("[role=slider]");
-                if (analysis?.close && step === 2 && !onHandle) tapSeed(e);
+                const hit = !onHandle && step === 2 ? toothAt(e) : null;
+                if (hit !== null) {
+                  setSel(hit);
+                  dragMoves.current = true;
+                } else if (analysis?.close && step === 2 && !onHandle) tapSeed(e);
                 else setFromPointer(e);
               }}
               onPointerMove={(e) => dragging.current && !dragMoves.current && setFromPointer(e)}
@@ -1213,6 +1651,11 @@ export default function Studio() {
                 className="absolute inset-0 w-full h-full"
                 style={{ clipPath: `inset(0 ${100 - split}% 0 0)` }}
                 aria-label={t.before}
+              />
+              <canvas
+                ref={guideRef}
+                aria-hidden
+                className="absolute inset-0 w-full h-full pointer-events-none"
               />
               <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/70 text-white text-base font-semibold">
                 {t.before}
@@ -1274,7 +1717,15 @@ export default function Studio() {
                         <span aria-hidden>⚠</span>
                       )}
                       {quality.acceptable ? t.relGood : t.relLow}
+                      <span
+                        className={`ms-auto rounded-full px-3 py-1 text-base font-bold ${
+                          tier === "A" ? "bg-emerald-400 text-black" : tier === "B" ? "bg-yellow-300 text-black" : "bg-red-400 text-black"
+                        }`}
+                      >
+                        {tier}
+                      </span>
                     </p>
+                    <p className={`text-base ${muted}`}>{tier === "A" ? t.tierA : tier === "B" ? t.tierB : t.tierC}</p>
                     {quality.acceptable ? (
                       <p className={`text-base ${muted}`}>{t.relGoodWhy}</p>
                     ) : (
@@ -1287,8 +1738,71 @@ export default function Studio() {
                         </ul>
                       </>
                     )}
+                    <details className="mt-3">
+                      <summary className="cursor-pointer font-semibold min-h-[44px] flex items-center">{t.clinician}</summary>
+                      <ul className={`mt-2 space-y-1 text-base ${muted}`}>
+                        {quality.signals.map((x) => (
+                          <li key={x.id}>
+                            {x.label}: {x.ok ? t.chipOk : t.chipNo}. {x.note}
+                          </li>
+                        ))}
+                        <li>
+                          {t.teethFound}: {engine ? engine.teeth.length : 0}
+                        </li>
+                        <li>
+                          {t.outlineQ}: {engine ? Math.round(engine.medianSolidity * 100) + "%" : "-"}
+                        </li>
+                        <li>
+                          {t.caseId}: {caseId}
+                        </li>
+                      </ul>
+                    </details>
                   </div>
                 )}
+                <div className={`rounded-2xl p-5 space-y-3 ${card}`}>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <h2 className="font-semibold">{t.optTitle}</h2>
+                    <button className={iconBtn} onClick={playReveal}>
+                      <RefreshCw className="w-4 h-4" aria-hidden />
+                      {t.replay}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3" role="radiogroup" aria-label={t.optTitle}>
+                    {([
+                      ["whiten", t.optWhiten, t.optWhitenHint],
+                      ["bonding", t.optBond, t.optBondHint],
+                      ["veneers", t.optVeneer, t.optVeneerHint],
+                    ] as [PresetKey, string, string][]).map(([k, label, hint]) => {
+                      const off = k !== "whiten" && !shapeOk;
+                      const on = preset === k;
+                      return (
+                        <button
+                          key={k}
+                          role="radio"
+                          aria-checked={on}
+                          disabled={off}
+                          onClick={() => choosePreset(k)}
+                          className={`rounded-2xl overflow-hidden text-start focus:outline-none focus-visible:ring-4 focus-visible:ring-yellow-300 disabled:opacity-40 ${
+                            on ? (hc ? "border-4 border-yellow-300" : "border-4 border-cyan-400") : hc ? "border-2 border-white" : "border-2 border-white/20"
+                          }`}
+                        >
+                          <div className="aspect-[4/3] bg-black/40">
+                            {thumbs[k] ? <img src={thumbs[k]} alt="" className="w-full h-full object-cover" /> : null}
+                          </div>
+                          <div className="p-2">
+                            <p className="font-bold text-base">
+                              {on && <Check className="inline w-4 h-4 me-1" aria-hidden />}
+                              {label}
+                            </p>
+                            <p className="text-sm opacity-80">{hint}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {!shapeOk && <p className="text-yellow-300 text-base">{t.optRefused}</p>}
+                </div>
+
                 <div className={`rounded-2xl p-5 space-y-4 ${card}`}>
                   <h2 className="font-semibold">{t.looks}</h2>
                   <div className="grid grid-cols-3 gap-3" role="radiogroup" aria-label={t.looks}>
@@ -1337,6 +1851,44 @@ export default function Studio() {
                   </div>
                 </div>
 
+                {shapeOk && sel === null && <p className={`text-base ${muted}`}>{t.tapTeeth}</p>}
+                {sel !== null && (
+                  <div className={`rounded-2xl p-5 space-y-3 ${card}`} role="group" aria-label={t.editTitle}>
+                    <h2 className="font-semibold">{t.editTitle}</h2>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {([
+                        [t.longer, "len", 1],
+                        [t.shorter, "len", -1],
+                        [t.wider, "wid", 1],
+                        [t.narrower, "wid", -1],
+                        [t.turnL, "rot", -1],
+                        [t.turnR, "rot", 1],
+                      ] as [string, keyof ToothEdit, number][]).map(([label, k, d]) => (
+                        <button key={label} className={ghost} onClick={() => bump(k, d)}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex gap-3 flex-wrap">
+                      <button
+                        className={ghost}
+                        onClick={() => {
+                          setEdits((m) => {
+                            const n = { ...m };
+                            delete n[sel];
+                            return n;
+                          });
+                        }}
+                      >
+                        {t.resetTooth}
+                      </button>
+                      <button className={primary} onClick={() => setSel(null)}>
+                        {t.done}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {showGuides && <p className={`text-base ${muted}`}>{t.guideLegend}</p>}
                 <div className={`rounded-2xl p-5 space-y-3 ${card}`} data-solidity={engine ? engine.medianSolidity.toFixed(2) : ""} data-teeth={engine ? engine.teeth.length : 0}>
                   <h2 className="font-semibold">{t.shapeTitle}</h2>
                   {!shapeOk && <p className="text-yellow-300 text-base">{t.shapeRefused}</p>}
@@ -1345,13 +1897,18 @@ export default function Studio() {
                       { k: "smooth", on: smooth, set: setSmooth, label: t.smooth, hint: t.smoothHint },
                       { k: "straighten", on: straighten, set: setStraighten, label: t.straighten, hint: t.straightenHint },
                       { k: "balance", on: balance, set: setBalance, label: t.balance, hint: t.balanceHint },
+                      { k: "enamel", on: enamel, set: setEnamel, label: t.natural_depth, hint: t.natural_depthHint },
+                      { k: "guides", on: showGuides, set: setShowGuides, label: t.guides, hint: t.guidesHint },
                     ].map((x) => (
                       <button
                         key={x.k}
                         role="switch"
                         aria-checked={x.on}
                         disabled={!shapeOk}
-                        onClick={() => x.set(!x.on)}
+                        onClick={() => {
+                          x.set(!x.on);
+                          if (x.k !== "guides") setPreset(null);
+                        }}
                         className={`min-h-[72px] rounded-2xl px-3 py-2 text-start focus:outline-none focus-visible:ring-4 focus-visible:ring-yellow-300 disabled:opacity-40 ${
                           x.on ? (hc ? "bg-yellow-300 text-black" : "bg-cyan-400 text-slate-900") : hc ? "border-2 border-white" : "border border-white/25 hover:bg-white/10"
                         }`}
@@ -1392,7 +1949,7 @@ export default function Studio() {
                   {name.trim() ? ` · ${name.trim()}` : ""}
                   {caseId ? ` · ${t.caseId} ${caseId}` : ""}
                 </p>
-                <div className="grid sm:grid-cols-3 gap-3">
+                <div className="grid sm:grid-cols-2 gap-3">
                   <button className={primary} onClick={save} disabled={saved}>
                     {saved ? <Check className="w-5 h-5" aria-hidden /> : <Save className="w-5 h-5" aria-hidden />}
                     {saved ? t.saved : t.save}
@@ -1404,6 +1961,14 @@ export default function Studio() {
                   <button className={ghost} onClick={share}>
                     <Share2 className="w-5 h-5" aria-hidden />
                     {t.share}
+                  </button>
+                  <button className={ghost} onClick={downloadReport} data-testid="report-pdf">
+                    <Download className="w-5 h-5" aria-hidden />
+                    {t.report}
+                  </button>
+                  <button className={ghost} onClick={shareReport}>
+                    <Share2 className="w-5 h-5" aria-hidden />
+                    {t.reportShare}
                   </button>
                 </div>
                 <p role="status" className="min-h-[1.5rem] text-emerald-300">
