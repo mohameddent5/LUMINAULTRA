@@ -42,3 +42,6 @@ Two third-party screenshots showed: facial midline, interpupillary line, commiss
 Reusable with what the engine can do today: dentist-placed, draggable guide lines (midline, horizontal reference, commissure line, incisal reference) with offsets read in tooth-widths; a proportion grid drawn from the dentist's own placed borders; the incisal edge curve when teeth pass the plausibility check.
 Needs a scale first: any mm or degree readout. The engine has no scale. A ruler or known-size object in frame, or a dentist-entered tooth width, is required, and the UI must say which one was used.
 Out of reach now: automatic face, eye and interpupillary detection (no face model in the engine), 3D arch and mock-up views (need a 3D scan), lower-arch outlines.
+
+## Design target (user reference, UX only, not stored)
+A third-party DSD "clinical summary" shows initial, 3D design, mock-up, final and a 2D simulation, all from a plain face photo. Target: from one camera frame, an automatic 2D simulation of the designed smile on the real face. No manual controls. When detection fails the app says so and guides a better capture.

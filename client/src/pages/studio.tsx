@@ -67,8 +67,6 @@ const T = {
     subtle: "Softer",
     strong: "Brighter",
     notes: "What we see",
-    tapTooth: "Wrong teeth highlighted? Tap a tooth in the photo and the preview follows.",
-    tapMouth: "The smile could not be found automatically. Tap the teeth in the photo.",
     foundMouth: "Smile found.",
     retake: "Retake photo",
     levelOf: ["Very subtle", "Natural", "Fresh", "Bright", "Very bright"],
@@ -84,12 +82,6 @@ const T = {
     natural_depthHint: "Translucent edges, warmer necks",
     guides: "Show guides",
     guidesHint: "Midline and edge curve",
-    guideLinesTitle: "Your guide lines",
-    guideLinesHint: "Lines you place yourself. The app does not detect them.",
-    glMid: "Midline",
-    glHor: "Horizontal reference",
-    glTilt: "Commissure line tilt",
-    glShow: "Show my lines",
     guideLegend: "Cyan dashed: dental midline. White: smooth edge curve. Yellow: current edge line. Pink dots: gum line.",
     tapTeeth: "Tap a tooth to adjust it.",
     editTitle: "Adjust this tooth",
@@ -140,7 +132,7 @@ const T = {
     caseId: "Case ID",
     verified: "Capture verified",
     unverified: "Low-confidence capture",
-    n_close: "Close-up photo: teeth were found by colour. Check the preview looks right.",
+    n_close: "No whole face found, so the teeth were located by colour only. For a reliable result, step back until your whole face is in view, look straight at the camera and smile.",
     n_teeth_ok: "Teeth are visible.",
     n_teeth_no: "Few teeth are showing. Ask for a bigger smile and retake for a better preview.",
     n_tilt: "The head is tilted. Retake with a level head for the best preview.",
@@ -200,8 +192,6 @@ const T = {
     subtle: "أهدأ",
     strong: "أكثر نصاعة",
     notes: "ما نراه",
-    tapTooth: "هل الأسنان المحددة غير صحيحة؟ المس سناً في الصورة وستتبعه المعاينة.",
-    tapMouth: "تعذّر إيجاد الابتسامة تلقائياً. المس الأسنان في الصورة.",
     foundMouth: "تم إيجاد الابتسامة.",
     retake: "إعادة التقاط",
     levelOf: ["هادئ جداً", "طبيعي", "منتعش", "ناصع", "ناصع جداً"],
@@ -217,12 +207,6 @@ const T = {
     natural_depthHint: "Translucent edges, warmer necks",
     guides: "Show guides",
     guidesHint: "Midline and edge curve",
-    guideLinesTitle: "Your guide lines",
-    guideLinesHint: "Lines you place yourself. The app does not detect them.",
-    glMid: "Midline",
-    glHor: "Horizontal reference",
-    glTilt: "Commissure line tilt",
-    glShow: "Show my lines",
     guideLegend: "Cyan dashed: dental midline. White: smooth edge curve. Yellow: current edge line. Pink dots: gum line.",
     tapTeeth: "Tap a tooth to adjust it.",
     editTitle: "Adjust this tooth",
@@ -330,7 +314,49 @@ type Analysis = {
   close?: boolean;
   seed?: Pt;
   tiltDeg: number | null;
+  face?: FaceGuides;
 };
+
+/** Lines worked out automatically from the 478 face landmarks. All in canvas pixels. */
+type FaceGuides = {
+  ipl: [Pt, Pt]; // pupil to pupil
+  mid: [Pt, Pt]; // forehead point to chin, perpendicular drop used for display
+  com: [Pt, Pt]; // mouth corner to mouth corner
+  lipMid: Pt;
+  comCantDeg: number; // commissure line angle relative to the eye line
+  midOffsetPct: number; // mouth centre vs facial midline, % of mouth width (+ = patient's left)
+};
+
+function faceGuides(f: { x: number; y: number }[], w: number, h: number): FaceGuides {
+  const P = (i: number): Pt => ({ x: f[i].x * w, y: f[i].y * h });
+  const mean = (a: Pt, b: Pt): Pt => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  // iris centres when present (478 points), else the middle of each eye's corners
+  const eyeR = f.length > 473 ? P(468) : mean(P(33), P(133));
+  const eyeL = f.length > 473 ? P(473) : mean(P(263), P(362));
+  const brow = mean(P(168), P(168));
+  const chin = P(152);
+  const cL = P(61);
+  const cR = P(291);
+  const ang = (a: Pt, b: Pt) => (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+  const iplAng = ang(eyeR, eyeL);
+  const comAng = ang(cL, cR);
+  // facial midline: line through the bridge of the nose and the chin
+  const lipMid = mean(P(13), P(14));
+  const dx = chin.x - brow.x;
+  const dy = chin.y - brow.y;
+  const t = ((lipMid.x - brow.x) * dx + (lipMid.y - brow.y) * dy) / (dx * dx + dy * dy);
+  const foot = { x: brow.x + t * dx, y: brow.y + t * dy };
+  const mouthW = Math.hypot(cR.x - cL.x, cR.y - cL.y) || 1;
+  const sign = Math.sign((lipMid.x - foot.x) * (cR.x - cL.x) + (lipMid.y - foot.y) * (cR.y - cL.y));
+  return {
+    ipl: [eyeR, eyeL],
+    mid: [brow, chin],
+    com: [cL, cR],
+    lipMid,
+    comCantDeg: comAng - iplAng,
+    midOffsetPct: (sign * Math.hypot(lipMid.x - foot.x, lipMid.y - foot.y) * 100) / mouthW,
+  };
+}
 
 async function findSmile(canvas: HTMLCanvasElement): Promise<Analysis> {
   const w = canvas.width;
@@ -347,7 +373,7 @@ async function findSmile(canvas: HTMLCanvasElement): Promise<Analysis> {
       const a = f[33];
       const b = f[263];
       const tilt = (Math.atan2((b.y - a.y) * h, (b.x - a.x) * w) * 180) / Math.PI;
-      return { polygon, auto: true, tiltDeg: tilt };
+      return { polygon, auto: true, tiltDeg: tilt, face: faceGuides(f, w, h) };
     }
   } catch (e) {
     console.warn("Face engine unavailable:", e);
@@ -701,11 +727,33 @@ function drawGuides(
   engine: TeethEngine | null,
   showGuides: boolean,
   selected: number | null,
+  face?: FaceGuides | null,
 ) {
   cv.width = o.width;
   cv.height = o.height;
   const g = cv.getContext("2d")!;
   g.clearRect(0, 0, cv.width, cv.height);
+  if (face) {
+    const fl = Math.max(2, o.width / 500);
+    const ext = (a: Pt, b: Pt, k: number): [Pt, Pt] => [
+      { x: a.x - (b.x - a.x) * k, y: a.y - (b.y - a.y) * k },
+      { x: b.x + (b.x - a.x) * k, y: b.y + (b.y - a.y) * k },
+    ];
+    const line = (a: Pt, b: Pt, col: string) => {
+      g.strokeStyle = col;
+      g.lineWidth = fl;
+      g.beginPath();
+      g.moveTo(a.x, a.y);
+      g.lineTo(b.x, b.y);
+      g.stroke();
+    };
+    const [i0, i1] = ext(face.ipl[0], face.ipl[1], 0.35);
+    line(i0, i1, "rgba(226,232,240,0.85)");
+    const [m0, m1] = ext(face.mid[0], face.mid[1], 0.25);
+    line(m0, m1, "rgba(226,232,240,0.85)");
+    const [c0, c1] = ext(face.com[0], face.com[1], 0.3);
+    line(c0, c1, "rgba(252,211,77,0.95)");
+  }
   if (!engine || !region) return;
   const lw = Math.max(2, o.width / 400);
   if (showGuides) {
@@ -848,7 +896,7 @@ export default function Studio() {
   const [edits, setEdits] = useState<Record<number, ToothEdit>>({});
   const [sel, setSel] = useState<number | null>(null);
   const [showGuides, setShowGuides] = useState(false);
-  const [myLines, setMyLines] = useState({ on: false, mid: 50, hor: 50, tilt: 0 });
+  const [showFace, setShowFace] = useState(true);
   const [preset, setPreset] = useState<PresetKey | null>(null);
   const [thumbs, setThumbs] = useState<Partial<Record<PresetKey, string>>>({});
   const [photoVersion, setPhotoVersion] = useState(0);
@@ -923,7 +971,6 @@ export default function Studio() {
     setEdits({});
     setSel(null);
     setShowGuides(false);
-    setMyLines({ on: false, mid: 50, hor: 50, tilt: 0 });
     setPreset("whiten");
     setPhotoVersion((v) => v + 1);
     setCaseId("");
@@ -1056,8 +1103,8 @@ export default function Studio() {
     beforeShow.current.height = o.height;
     beforeShow.current.getContext("2d")!.drawImage(o, 0, 0);
     paintAfter(o, afterRef.current, region, engine, { level, smooth, straighten, balance, enamel, edits });
-    if (guideRef.current) drawGuides(guideRef.current, o, region, engine, showGuides, sel);
-  }, [step, region, level, hasPhoto, engine, smooth, straighten, balance, enamel, edits, showGuides, sel]);
+    if (guideRef.current) drawGuides(guideRef.current, o, region, engine, showGuides, sel, showFace ? analysis?.face : null);
+  }, [step, region, level, hasPhoto, engine, smooth, straighten, balance, enamel, edits, showGuides, sel, showFace, analysis]);
 
   /* option previews (whitening / bonding / veneers style) */
   useEffect(() => {
@@ -1133,31 +1180,6 @@ export default function Studio() {
       return { ...m, [sel]: { ...cur, [k]: Math.max(-6, Math.min(6, cur[k] + d)) } };
     });
   };
-  const tapSeed = (e: React.PointerEvent<HTMLDivElement>) => {
-    const o = originalRef.current;
-    if (!o || !analysis) return;
-    const r = e.currentTarget.getBoundingClientRect();
-    const seed = { x: ((e.clientX - r.left) / r.width) * o.width, y: ((e.clientY - r.top) / r.height) * o.height };
-    dragMoves.current = true;
-    const na = { ...analysis, seed };
-    const reg = buildSeeded(o, seed);
-    const g = regrade(o, na, reg);
-    setAnalysis(na);
-    setRegion(reg);
-    setEngine(g.engine);
-    setQuality(g.quality);
-  };
-  const tapMouth = (e: React.PointerEvent<HTMLDivElement>) => {
-    const o = originalRef.current;
-    if (!o || !analysis || analysis.auto) return;
-    const r = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - r.left) / r.width) * o.width;
-    const y = ((e.clientY - r.top) / r.height) * o.height;
-    const poly = ellipse(x, y, o.width * 0.17, o.width * 0.06);
-    setAnalysis({ ...analysis, polygon: poly });
-    setRegion(buildRegion(o, poly));
-  };
-
   const notes = useMemo(() => {
     if (!analysis) return [] as string[];
     const out: string[] = [];
@@ -1667,8 +1689,7 @@ export default function Studio() {
                 if (hit !== null) {
                   setSel(hit);
                   dragMoves.current = true;
-                } else if (analysis?.close && step === 2 && !onHandle) tapSeed(e);
-                else setFromPointer(e);
+                } else setFromPointer(e);
               }}
               onPointerMove={(e) => dragging.current && !dragMoves.current && setFromPointer(e)}
               onPointerUp={() => { dragging.current = false; dragMoves.current = false; }}
@@ -1686,13 +1707,6 @@ export default function Studio() {
                 aria-hidden
                 className="absolute inset-0 w-full h-full pointer-events-none"
               />
-              {myLines.on && (
-                <svg aria-hidden className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
-                  <line x1={myLines.mid} y1="0" x2={myLines.mid} y2="100" stroke="#e5e7eb" strokeWidth="0.35" vectorEffect="non-scaling-stroke" />
-                  <line x1="0" y1={myLines.hor} x2="100" y2={myLines.hor} stroke="#94a3b8" strokeWidth="0.35" vectorEffect="non-scaling-stroke" />
-                  <line x1="0" y1={myLines.hor + Math.tan((myLines.tilt * Math.PI) / 180) * 50} x2="100" y2={myLines.hor - Math.tan((myLines.tilt * Math.PI) / 180) * 50} stroke="#fcd34d" strokeWidth="0.35" vectorEffect="non-scaling-stroke" />
-                </svg>
-              )}
               <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/70 text-white text-base font-semibold">
                 {t.before}
               </span>
@@ -1727,16 +1741,6 @@ export default function Studio() {
 
             {step === 2 && (
               <>
-                {analysis?.close && (
-                  <p role="status" className="rounded-xl p-3 bg-sky-900/40 border border-sky-300/30 text-sky-100 font-medium">
-                    {t.tapTooth}
-                  </p>
-                )}
-                {analysis && !analysis.auto && (
-                  <p role="status" className="rounded-xl p-3 bg-amber-200 text-black font-semibold">
-                    {t.tapMouth}
-                  </p>
-                )}
                 {quality && (
                   <div
                     role="status"
@@ -1960,46 +1964,6 @@ export default function Studio() {
                         <span className="block text-sm opacity-90">{x.hint}</span>
                       </button>
                     ))}
-                  </div>
-                  <div className="rounded-2xl border border-white/15 p-3 space-y-3">
-                    <h3 className="font-semibold">{t.guideLinesTitle}</h3>
-                    <p className={`text-base ${muted}`}>{t.guideLinesHint}</p>
-                    <button
-                      role="switch"
-                      aria-checked={myLines.on}
-                      onClick={() => setMyLines((m) => ({ ...m, on: !m.on }))}
-                      className={`min-h-[56px] rounded-2xl px-4 font-bold focus:outline-none focus-visible:ring-4 focus-visible:ring-amber-200 ${
-                        myLines.on ? (hc ? "bg-amber-200 text-black" : "bg-sky-700 text-white") : hc ? "border-2 border-white" : "border border-white/25 hover:bg-white/10"
-                      }`}
-                    >
-                      {myLines.on && <Check className="inline w-5 h-5 me-1" aria-hidden />}
-                      {t.glShow}
-                    </button>
-                    {myLines.on && (
-                      <div className="grid gap-3">
-                        {([
-                          ["mid", t.glMid, 0, 100],
-                          ["hor", t.glHor, 0, 100],
-                          ["tilt", t.glTilt, -15, 15],
-                        ] as const).map(([k, label, lo, hi]) => (
-                          <label key={k} className="block">
-                            <span className="block text-base font-semibold">
-                              {label}
-                              {k === "tilt" ? `: ${myLines.tilt}°` : ""}
-                            </span>
-                            <input
-                              type="range"
-                              min={lo}
-                              max={hi}
-                              step={k === "tilt" ? 0.5 : 0.5}
-                              value={myLines[k]}
-                              onChange={(e) => setMyLines((m) => ({ ...m, [k]: Number(e.target.value) }))}
-                              className="w-full h-10"
-                            />
-                          </label>
-                        ))}
-                      </div>
-                    )}
                   </div>
                   <button className={ghost} onClick={rotate}>
                     <RefreshCw className="w-5 h-5" aria-hidden />
