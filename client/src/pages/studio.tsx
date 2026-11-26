@@ -1,3 +1,4 @@
+import { lesionFlags } from "@/lib/lesionFlags";
 import { PeakTracker, measureFrame } from "@/lib/peakGum";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
@@ -913,9 +914,14 @@ function drawGuides(
   }
 }
 
-function tierOf(q: CaptureQuality | null, e: TeethEngine | null): "A" | "B" | "C" {
+function tierOf(q: CaptureQuality | null, e: TeethEngine | null, closeUp = false): "A" | "B" | "C" {
   if (!q || !q.acceptable) return "C";
-  if (e && e.teeth.length >= 6 && e.medianSolidity >= 0.92) return "A";
+  // visible decay or fracture-like dark patches: the shape tools assume sound crowns, so refuse them
+  const fl = lesionFlags(e);
+  if (fl.length >= 3 || fl.some((f) => f.level === "marked")) return "C";
+  if (fl.length) return "B";
+  // a mouth-only crop has no face to check viewing angle, midline or age of dentition against: never A
+  if (!closeUp && e && e.teeth.length >= 6 && e.medianSolidity >= 0.92) return "A";
   return "B";
 }
 
@@ -1037,7 +1043,7 @@ export default function Studio() {
     setEnamel(false);
     setEdits({});
     setSel(null);
-    setShowGuides(!!g.sam && tierOf(g.quality, g.engine) !== "C"); // no lines on a frame the checks rejected
+    setShowGuides(!!g.sam && tierOf(g.quality, g.engine, !!g.analysis.close) !== "C"); // no lines on a frame the checks rejected
     setPreset("whiten");
     setPhotoVersion((v) => v + 1);
     setCaseId("");
@@ -1346,7 +1352,7 @@ export default function Studio() {
     return out;
   }, [analysis, region, t]);
 
-  const tier = tierOf(quality, engine);
+  const tier = tierOf(quality, engine, !!analysis?.close);
   const levelWord = t.levelOf[Math.min(4, Math.floor(level * 5))];
 
   /* compare slider */
@@ -1901,12 +1907,12 @@ export default function Studio() {
                     }`}
                   >
                     <p className="font-bold flex items-center gap-2">
-                      {quality.acceptable ? (
+                      {tier !== "C" ? (
                         <ShieldCheck className="w-6 h-6 text-emerald-300" aria-hidden />
                       ) : (
                         <span aria-hidden>⚠</span>
                       )}
-                      {quality.acceptable ? t.relGood : t.relLow}
+                      {tier !== "C" ? t.relGood : t.relLow}
                       <span
                         className={`ms-auto rounded-full px-3 py-1 text-base font-bold ${
                           tier === "A" ? "bg-emerald-300 text-black" : tier === "B" ? "bg-amber-200 text-black" : "bg-red-300 text-black"
@@ -1916,7 +1922,14 @@ export default function Studio() {
                       </span>
                     </p>
                     <p className={`text-base ${muted}`}>{tier === "A" ? t.tierA : tier === "B" ? t.tierB : t.tierC}</p>
-                    {quality.acceptable ? (
+                    {lesionFlags(engine).length > 0 && (
+                      <p className={`text-base ${muted}`} data-testid="flag-caries">
+                        Possible caries on {lesionFlags(engine).length} {lesionFlags(engine).length > 1 ? "teeth" : "tooth"} (dark or brown patches). Verify clinically. Colour only: stain, calculus or a dark filling look the same.
+                      </p>
+                    )}
+                    {quality.acceptable && tier === "C" ? (
+                      <p className={`text-base ${muted}`}>The photo itself is fine, but dark patches suggest decay or damage. Design lines are hidden because the shape tools assume sound teeth.</p>
+                    ) : quality.acceptable ? (
                       <p className={`text-base ${muted}`}>{t.relGoodWhy}</p>
                     ) : (
                       <>
