@@ -1086,7 +1086,7 @@ export default function Studio() {
     const frames: HTMLCanvasElement[] = [];
     setBurstMsg(t.bursting);
     for (let i = 0; i < 10; i++) {
-      frames.push(toCanvas(v, v.videoWidth, v.videoHeight, 800));
+      frames.push(toCanvas(v, v.videoWidth, v.videoHeight, 1280));
       await new Promise((r) => setTimeout(r, 200));
     }
     stopCamera();
@@ -1126,6 +1126,9 @@ export default function Studio() {
     setBusy(false);
   };
 
+  const burstRef = useRef<() => Promise<void>>(async () => {});
+  burstRef.current = burst;
+
   /* live capture gate */
   useEffect(() => {
     if (!cameraOn) {
@@ -1134,6 +1137,8 @@ export default function Studio() {
     }
     let stop = false;
     let running = false;
+    let prev: Uint8Array | null = null;
+    let steady = 0;
     const tick = async () => {
       const v = videoRef.current;
       if (stop || running || !v || !v.videoWidth) return;
@@ -1141,7 +1146,11 @@ export default function Studio() {
       try {
         const g = await gradeFrame(toCanvas(v, v.videoWidth, v.videoHeight, 640));
         if (stop) return;
-        const bad = g.quality.signals.find((x) => !x.ok);
+        // the live check runs on a 640 px copy; judge resolution on the real video size instead
+        const resOk = Math.min(v.videoWidth, v.videoHeight) >= 480;
+        // the fast colour pass miscounts single teeth on live frames; trust the share of tooth-coloured pixels in the mouth instead
+        const teethSeen = !!g.region && g.region.toothShare >= (g.analysis.close ? 0.02 : 0.12);
+        const bad = g.quality.signals.find((x) => !x.ok && !(x.id === "resolution" && resOk) && !(x.id === "mouthVisibility" && teethSeen && x.value >= 0.08));
         const text = !bad
           ? t.live_ready
           : bad.id === "sharpness"
@@ -1153,7 +1162,31 @@ export default function Studio() {
                 : g.engine && g.engine.teeth.length > 0
                   ? t.live_closer
                   : t.live_teeth;
-        setLive({ ok: !bad, text });
+        console.info("[live]", g.quality.signals.map((x) => `${x.id}:${x.ok ? "ok" : "NO"}(${Number(x.value).toFixed(2)})`).join(" "), `teeth=${g.engine?.teeth.length ?? 0} share=${g.region?.toothShare.toFixed(3)}`);
+        // steadiness: mean brightness change on a tiny copy of two frames in a row
+        const sm = document.createElement("canvas");
+        sm.width = 48;
+        sm.height = 36;
+        sm.getContext("2d")!.drawImage(g.c, 0, 0, 48, 36);
+        const px = sm.getContext("2d")!.getImageData(0, 0, 48, 36).data;
+        const cur = new Uint8Array(48 * 36);
+        for (let i = 0; i < cur.length; i++) cur[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
+        let diff = 99;
+        if (prev) {
+          diff = 0;
+          for (let i = 0; i < cur.length; i++) diff += Math.abs(cur[i] - prev[i]);
+          diff /= cur.length;
+        }
+        prev = cur;
+        const still = diff < 5;
+        steady = !bad && still ? steady + 1 : 0;
+        setLive({ ok: !bad && still, text: !bad && !still ? "Hold still..." : text });
+        // good frame held steady for three checks in a row: capture by itself
+        if (steady >= 3) {
+          steady = 0;
+          stop = true;
+          void burstRef.current();
+        }
       } catch {
         /* keep last status */
       } finally {
