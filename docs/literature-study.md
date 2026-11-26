@@ -35,7 +35,7 @@ Other items found but not read in full (so not relied on): dental midline locali
 - MobileSAM, https://github.com/ChaoningZhang/MobileSAM: Apache-2.0.
 - Segment Anything, https://github.com/facebookresearch/segment-anything: Apache-2.0.
 - MediaPipe Face Landmarker: Apache-2.0 (tasks-vision package).
-Ultralytics YOLO is AGPL-3.0 by default, so a YOLO detector would need a commercial licence or a different detector. This is why the build uses SAM masks plus rules rather than a YOLO tooth detector (licence read from memory, to be confirmed before any YOLO use).
+Ultralytics YOLO is AGPL-3.0 by default, so a YOLO detector would need a commercial licence or a different detector. This is why the build uses SAM masks plus rules rather than a YOLO tooth detector (confirmed on https://github.com/ultralytics/ultralytics: AGPL-3.0 or a paid Enterprise licence).
 
 ## Applied to the detector
 
