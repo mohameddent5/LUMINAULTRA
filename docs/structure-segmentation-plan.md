@@ -45,3 +45,5 @@ Out of reach now: automatic face, eye and interpupillary detection (no face mode
 
 ## Design target (user reference, UX only, not stored)
 A third-party DSD "clinical summary" shows initial, 3D design, mock-up, final and a 2D simulation, all from a plain face photo. Target: from one camera frame, an automatic 2D simulation of the designed smile on the real face. No manual controls. When detection fails the app says so and guides a better capture.
+
+Second reference (published case figure, UX only, not stored): tooth-outline template and proportion percentages over the intraoral photo, crown-lengthening measurements, virtual wax mock-up, before/after face photos. Target for the automatic flow: outline template drawn on the detected teeth with ratio percentages, then before/after. Mm readouts only if a scale exists (it does not today).
