@@ -36,3 +36,9 @@ The images themselves are private and not stored in the repo.
 Classes: free gingiva region, attached gingiva region, and the boundary line between them (the free gingival groove). The yellow line the user drew is the free gingival margin, the edge of the free gingiva next to the tooth.
 Limits: in a smile photo the groove is a subtle change of texture and shade, often hidden by the upper lip, and many mouths show only a thin free band. Colour alone is unlikely to separate the two.
 Rule: ship only if it passes scoring on held-out labelled photos (boundary distance as a fraction of tooth height, per tooth). Until then the UI says "not detected" for these three classes and shows no guess. Needed from the user: hand labels of the groove on photos where it is visible (a thin line, with "not visible" noted when it is hidden).
+
+## UX references from commercial DSD software (ideas only; images not stored)
+Two third-party screenshots showed: facial midline, interpupillary line, commissure line, chin and face-oval guides, smile-arc curve, a transferred proportion grid over the teeth, tooth outlines, a calibrated ruler in the intraoral view, and a horizontal reference line through an incisal edge.
+Reusable with what the engine can do today: dentist-placed, draggable guide lines (midline, horizontal reference, commissure line, incisal reference) with offsets read in tooth-widths; a proportion grid drawn from the dentist's own placed borders; the incisal edge curve when teeth pass the plausibility check.
+Needs a scale first: any mm or degree readout. The engine has no scale. A ruler or known-size object in frame, or a dentist-entered tooth width, is required, and the UI must say which one was used.
+Out of reach now: automatic face, eye and interpupillary detection (no face model in the engine), 3D arch and mock-up views (need a 3D scan), lower-arch outlines.
