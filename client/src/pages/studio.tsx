@@ -1313,6 +1313,7 @@ export default function Studio() {
     const lines = [
       `Consent: patient agreement confirmed by the dentist${consentAt.current ? " on " + new Date(consentAt.current).toLocaleString() : ""}`,
       `Photo capture: ${quality?.acceptable ? "passed all checks" : "did not pass all checks, treat as a rough idea"}. Preview confidence ${tier}.`,
+      `Shape tools: ${shapeOk ? "available for this photo" : "not offered, the photo was not clear enough to reshape teeth honestly"}.`,
       `Edits applied: ${used}. Whitening level: ${levelWord.toLowerCase()}.`,
       `Case ID ${caseId || "-"} | Smile Studio engine 1 | Photo source: ${sourceRef.current}`,
     ];
@@ -1767,6 +1768,10 @@ export default function Studio() {
                         <li>
                           {t.outlineQ}: {engine ? Math.round(engine.medianSolidity * 100) + "%" : "-"}
                         </li>
+                        <li>Shape tools: {shapeOk ? "enabled (at least 4 clear teeth, outlines solid, photo sharp)" : "refused (needs at least 4 clear teeth, median outline quality 90% or more, and a sharp photo)"}</li>
+                        <li>Measured values: {quality.signals.map((x) => `${x.label} ${Number.isFinite(x.value) ? Math.round(x.value * 10) / 10 : "-"}`).join(", ")}</li>
+                        <li>Basis: 2D pixel analysis of this one photo. Not verified against measured clinical landmarks. The thresholds are not yet calibrated on real phone photos.</li>
+                        <li>Use: a visual preview to talk with the patient. Not a diagnosis, and not a treatment plan.</li>
                         <li>
                           {t.caseId}: {caseId}
                         </li>
