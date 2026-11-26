@@ -25,3 +25,8 @@ Source of truth: client/src/lib/dsdEvidence.ts. It holds graded metrics (high to
 Rules kept: golden proportion, RED and golden percentage are report-only (not found in natural dentition in a 26-study meta-analysis). Edges the source marks as extrapolated are shown as such. Bands are perception defaults, not diagnoses.
 Gaps: papilla height/fill and tooth-form (square, oval, triangular) norms have no verified entry yet. They are added only after a source is read and checked.
 Wiring: Studio does not yet read this table. Each metric is shown only when the structure it needs passed its quality check; otherwise it shows "not measurable on this photo" with the reason.
+
+## Reference examples (unverified origin, schema only, not ground truth)
+1. Upper arch, 10 teeth, full legend: mesial/distal/incisal, zenith, papilla, cervical margin, gingiva margin, lip borders.
+2. Same style on a different mouth, with lower arch: lower incisal line, lower papillae with short vertical tooth-boundary lines, and a midline diastema between the upper centrals (visible gap, dark space behind). Schema implications: lower-arch instances and boundaries; diastema as its own measurable gap (width between the two central mesial borders), already a metric in dsdEvidence.ts; the papilla points must allow a "missing or open" state; the gingiva margin may be absent on posterior teeth.
+The images themselves are private and not stored in the repo.
