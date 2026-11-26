@@ -48,7 +48,7 @@ export const MODEL_CARD = {
 
 let ortConfigured = false;
 
-function configureOrt(): void {
+export function configureOrt(): void {
   if (ortConfigured) return;
   // Self-hosted wasm: no CDN, works offline on venue wifi.
   // The /wasm entry point loads ort-wasm-simd-threaded.wasm (not the larger jsep

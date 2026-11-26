@@ -1,0 +1,5 @@
+MobileSAM (https://github.com/ChaoningZhang/MobileSAM) is licensed under Apache License 2.0.
+Segment Anything (https://github.com/facebookresearch/segment-anything) is licensed under Apache License 2.0.
+The ONNX exports in this folder (mobilesam_encoder.onnx, mobilesam_decoder.onnx) come from
+https://huggingface.co/Acly/MobileSAM (model card licence: MIT), made from the MobileSAM weights.
+Used zero-shot: no weights were trained or changed on any patient photo.
