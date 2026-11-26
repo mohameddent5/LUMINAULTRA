@@ -84,6 +84,12 @@ const T = {
     natural_depthHint: "Translucent edges, warmer necks",
     guides: "Show guides",
     guidesHint: "Midline and edge curve",
+    guideLinesTitle: "Your guide lines",
+    guideLinesHint: "Lines you place yourself. The app does not detect them.",
+    glMid: "Midline",
+    glHor: "Horizontal reference",
+    glTilt: "Commissure line tilt",
+    glShow: "Show my lines",
     guideLegend: "Cyan dashed: dental midline. White: smooth edge curve. Yellow: current edge line. Pink dots: gum line.",
     tapTeeth: "Tap a tooth to adjust it.",
     editTitle: "Adjust this tooth",
@@ -211,6 +217,12 @@ const T = {
     natural_depthHint: "Translucent edges, warmer necks",
     guides: "Show guides",
     guidesHint: "Midline and edge curve",
+    guideLinesTitle: "Your guide lines",
+    guideLinesHint: "Lines you place yourself. The app does not detect them.",
+    glMid: "Midline",
+    glHor: "Horizontal reference",
+    glTilt: "Commissure line tilt",
+    glShow: "Show my lines",
     guideLegend: "Cyan dashed: dental midline. White: smooth edge curve. Yellow: current edge line. Pink dots: gum line.",
     tapTeeth: "Tap a tooth to adjust it.",
     editTitle: "Adjust this tooth",
@@ -836,6 +848,7 @@ export default function Studio() {
   const [edits, setEdits] = useState<Record<number, ToothEdit>>({});
   const [sel, setSel] = useState<number | null>(null);
   const [showGuides, setShowGuides] = useState(false);
+  const [myLines, setMyLines] = useState({ on: false, mid: 50, hor: 50, tilt: 0 });
   const [preset, setPreset] = useState<PresetKey | null>(null);
   const [thumbs, setThumbs] = useState<Partial<Record<PresetKey, string>>>({});
   const [photoVersion, setPhotoVersion] = useState(0);
@@ -910,6 +923,7 @@ export default function Studio() {
     setEdits({});
     setSel(null);
     setShowGuides(false);
+    setMyLines({ on: false, mid: 50, hor: 50, tilt: 0 });
     setPreset("whiten");
     setPhotoVersion((v) => v + 1);
     setCaseId("");
@@ -1672,6 +1686,13 @@ export default function Studio() {
                 aria-hidden
                 className="absolute inset-0 w-full h-full pointer-events-none"
               />
+              {myLines.on && (
+                <svg aria-hidden className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <line x1={myLines.mid} y1="0" x2={myLines.mid} y2="100" stroke="#e5e7eb" strokeWidth="0.35" vectorEffect="non-scaling-stroke" />
+                  <line x1="0" y1={myLines.hor} x2="100" y2={myLines.hor} stroke="#94a3b8" strokeWidth="0.35" vectorEffect="non-scaling-stroke" />
+                  <line x1="0" y1={myLines.hor + Math.tan((myLines.tilt * Math.PI) / 180) * 50} x2="100" y2={myLines.hor - Math.tan((myLines.tilt * Math.PI) / 180) * 50} stroke="#fcd34d" strokeWidth="0.35" vectorEffect="non-scaling-stroke" />
+                </svg>
+              )}
               <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/70 text-white text-base font-semibold">
                 {t.before}
               </span>
@@ -1939,6 +1960,46 @@ export default function Studio() {
                         <span className="block text-sm opacity-90">{x.hint}</span>
                       </button>
                     ))}
+                  </div>
+                  <div className="rounded-2xl border border-white/15 p-3 space-y-3">
+                    <h3 className="font-semibold">{t.guideLinesTitle}</h3>
+                    <p className={`text-base ${muted}`}>{t.guideLinesHint}</p>
+                    <button
+                      role="switch"
+                      aria-checked={myLines.on}
+                      onClick={() => setMyLines((m) => ({ ...m, on: !m.on }))}
+                      className={`min-h-[56px] rounded-2xl px-4 font-bold focus:outline-none focus-visible:ring-4 focus-visible:ring-amber-200 ${
+                        myLines.on ? (hc ? "bg-amber-200 text-black" : "bg-sky-700 text-white") : hc ? "border-2 border-white" : "border border-white/25 hover:bg-white/10"
+                      }`}
+                    >
+                      {myLines.on && <Check className="inline w-5 h-5 me-1" aria-hidden />}
+                      {t.glShow}
+                    </button>
+                    {myLines.on && (
+                      <div className="grid gap-3">
+                        {([
+                          ["mid", t.glMid, 0, 100],
+                          ["hor", t.glHor, 0, 100],
+                          ["tilt", t.glTilt, -15, 15],
+                        ] as const).map(([k, label, lo, hi]) => (
+                          <label key={k} className="block">
+                            <span className="block text-base font-semibold">
+                              {label}
+                              {k === "tilt" ? `: ${myLines.tilt}°` : ""}
+                            </span>
+                            <input
+                              type="range"
+                              min={lo}
+                              max={hi}
+                              step={k === "tilt" ? 0.5 : 0.5}
+                              value={myLines[k]}
+                              onChange={(e) => setMyLines((m) => ({ ...m, [k]: Number(e.target.value) }))}
+                              className="w-full h-10"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <button className={ghost} onClick={rotate}>
                     <RefreshCw className="w-5 h-5" aria-hidden />
