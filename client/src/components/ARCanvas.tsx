@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { patientsApi, snapshotsApi } from "@/lib/store";
 import { LandmarkSmoother, MeasurementStabilizer, faceQuality } from "@/lib/smoothing";
 
 interface DSDMeasurements {
@@ -892,18 +893,28 @@ End of Report | Lumina Ultra™ v1.0
     // Draw overlays on top
     compositeCtx.drawImage(overlayCanvas, 0, 0);
 
-    // Save to localStorage for smile simulator
-    const imageData = composite.toDataURL("image/jpeg");
-    const snapshots = JSON.parse(localStorage.getItem("capturedSnapshots") || "[]");
-    const snapshot = {
-      id: Date.now(),
-      date: new Date().toLocaleDateString(),
-      time: new Date().toLocaleTimeString(),
-      image: imageData,
-      analysis: analysis,
-    };
-    snapshots.push(snapshot);
-    localStorage.setItem("capturedSnapshots", JSON.stringify(snapshots));
+    const imageData = composite.toDataURL("image/jpeg", 0.85);
+    const patientName = (window.prompt("Patient name or ID for this capture:", "") || "").trim();
+    if (!patientName) {
+      toast({ title: "Capture cancelled", description: "A patient name or ID is required." });
+      return;
+    }
+    (async () => {
+      try {
+        const m = analysis?.measurements as any;
+        const numeric: Record<string, number> = {};
+        for (const [k, v] of Object.entries(m ?? {})) if (typeof v === "number" && Number.isFinite(v)) numeric[k] = v;
+        const patient = await patientsApi.create({
+          patientName,
+          harmony: analysis?.overallHarmony ?? 0,
+          measurements: numeric,
+          notes: analysis?.classificationNotes ?? "",
+        });
+        await snapshotsApi.create(imageData, analysis, patient.id);
+      } catch {
+        toast({ title: "Not saved", description: "Could not save to the server. Check your connection and sign-in.", variant: "destructive" });
+      }
+    })();
 
     // Also download
     const link = document.createElement("a");

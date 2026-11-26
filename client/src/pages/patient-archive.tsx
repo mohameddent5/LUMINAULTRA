@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Home, Trash2, Download } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { patientsApi } from "@/lib/store";
 
 interface PatientAnalysis {
-  id: number;
+  id: string;
   date: string;
   patientName: string;
   harmony: number;
@@ -19,27 +20,31 @@ interface PatientAnalysis {
 export default function PatientArchive() {
   const [, navigate] = useLocation();
   const [patients, setPatients] = useState<PatientAnalysis[]>([]);
-  const [expandedPatient, setExpandedPatient] = useState<number | null>(null);
-  const [editingNotes, setEditingNotes] = useState<{ [key: number]: string }>({});
+  const [expandedPatient, setExpandedPatient] = useState<string | null>(null);
+  const [editingNotes, setEditingNotes] = useState<{ [key: string]: string }>({});
 
   useEffect(() => {
-    const saved = localStorage.getItem("patientArchive");
-    if (saved) setPatients(JSON.parse(saved));
+    patientsApi.list().then(setPatients).catch(() => toast({ title: "Error", description: "Could not load patients", variant: "destructive" }));
   }, []);
 
-  const updateClinicalNotes = (id: number, notes: string) => {
-    const updated = patients.map((p) =>
-      p.id === id ? { ...p, clinicalNotes: notes } : p
-    );
-    setPatients(updated);
-    localStorage.setItem("patientArchive", JSON.stringify(updated));
-    toast({ title: "Saved", description: "Clinical notes updated" });
+  const updateClinicalNotes = async (id: string, notes: string) => {
+    try {
+      await patientsApi.update(id, { clinicalNotes: notes });
+      setPatients(patients.map((p) => (p.id === id ? { ...p, clinicalNotes: notes } : p)));
+      toast({ title: "Saved", description: "Clinical notes updated" });
+    } catch {
+      toast({ title: "Error", description: "Notes were not saved", variant: "destructive" });
+    }
   };
 
-  const deletePatient = (id: number) => {
-    const updated = patients.filter((p) => p.id !== id);
-    setPatients(updated);
-    localStorage.setItem("patientArchive", JSON.stringify(updated));
+  const deletePatient = async (id: string) => {
+    if (!confirm("Delete this patient record permanently?")) return;
+    try {
+      await patientsApi.remove(id);
+      setPatients(patients.filter((p) => p.id !== id));
+    } catch {
+      toast({ title: "Error", description: "Could not delete", variant: "destructive" });
+    }
   };
 
   const exportReport = (patient: PatientAnalysis) => {

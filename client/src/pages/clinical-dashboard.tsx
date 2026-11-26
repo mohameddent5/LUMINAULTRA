@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { patientsApi, plansApi } from "@/lib/store";
 import { Home, TrendingUp, Users, FileText, Zap } from "lucide-react";
 
 interface DashboardStat {
@@ -17,10 +18,9 @@ export default function ClinicalDashboard() {
   const [recentAnalyses, setRecentAnalyses] = useState<any[]>([]);
 
   useEffect(() => {
-    const archive = JSON.parse(localStorage.getItem("patientArchive") || "[]");
-    const plans = JSON.parse(localStorage.getItem("treatmentPlans") || "[]");
+    Promise.all([patientsApi.list(), plansApi.list()]).then(([archive, plans]) => {
 
-    setRecentAnalyses(archive.slice(-5).reverse());
+    setRecentAnalyses(archive.slice(0, 5));
 
     const avgHarmony = archive.length > 0 ? (archive.reduce((sum: number, p: any) => sum + p.harmony, 0) / archive.length).toFixed(0) : "—";
 
@@ -50,6 +50,7 @@ export default function ClinicalDashboard() {
         color: "from-cyan-600 to-cyan-400",
       },
     ]);
+    }).catch(() => {});
   }, []);
 
   return (

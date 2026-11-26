@@ -1,3 +1,4 @@
+import { patientsApi, plansApi } from "@/lib/store";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -15,9 +16,10 @@ export default function PrescriptionGenerator() {
   ]);
 
   useEffect(() => {
-    const archive = JSON.parse(localStorage.getItem("patientArchive") || "[]");
-    setPatients(archive);
-    if (archive.length > 0) setSelectedPatient(archive[0]);
+    patientsApi.list().then((archive) => {
+      setPatients(archive);
+      if (archive.length > 0) setSelectedPatient(archive[0]);
+    }).catch(() => {});
   }, []);
 
   const allSpecs = [
@@ -104,7 +106,7 @@ Contact: [Contact Information]`;
               <select
                 value={selectedPatient?.id || ""}
                 onChange={(e) => {
-                  const patient = patients.find((p) => p.id === parseInt(e.target.value));
+                  const patient = patients.find((p) => p.id === e.target.value);
                   if (patient) setSelectedPatient(patient);
                 }}
                 className="w-full bg-white/10 border border-white/20 rounded px-3 py-2 text-white outline-none focus:border-primary/50"

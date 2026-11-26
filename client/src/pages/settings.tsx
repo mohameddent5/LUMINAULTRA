@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Home, Download, Upload, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { patientsApi, snapshotsApi, plansApi, settingsApi, legacy, auth } from "@/lib/store";
 
 interface ClinicSettings {
   clinicName: string;
@@ -23,23 +24,43 @@ export default function Settings() {
   });
 
   useEffect(() => {
-    const saved = localStorage.getItem("clinicSettings");
-    if (saved) setSettings(JSON.parse(saved));
+    settingsApi.get().then((saved) => {
+      if (saved && Object.keys(saved).length) setSettings((cur: any) => ({ ...cur, ...saved }));
+    }).catch(() => {});
   }, []);
 
-  const saveSettings = () => {
-    localStorage.setItem("clinicSettings", JSON.stringify(settings));
-    toast({ title: "Saved", description: "Clinic settings updated" });
+  const saveSettings = async () => {
+    try {
+      await settingsApi.save(settings as any);
+      toast({ title: "Saved", description: "Clinic settings updated" });
+    } catch {
+      toast({ title: "Error", description: "Settings were not saved", variant: "destructive" });
+    }
   };
 
-  const exportData = () => {
-    const data = {
-      settings,
-      patients: JSON.parse(localStorage.getItem("patientArchive") || "[]"),
-      snapshots: JSON.parse(localStorage.getItem("capturedSnapshots") || "[]"),
-      plans: JSON.parse(localStorage.getItem("treatmentPlans") || "[]"),
-      timestamp: new Date().toISOString(),
-    };
+  const importBrowserData = async () => {
+    try {
+      const r: any = await legacy.importAll();
+      toast({ title: "Imported", description: `${r.imported.patients} patients, ${r.imported.snapshots} snapshots, ${r.imported.plans} plans moved to your account` });
+    } catch {
+      toast({ title: "Error", description: "Import failed", variant: "destructive" });
+    }
+  };
+
+  const exportData = async () => {
+    let data: any;
+    try {
+      data = {
+        settings,
+        patients: await patientsApi.list(),
+        snapshots: await snapshotsApi.list(),
+        plans: await plansApi.list(),
+        timestamp: new Date().toISOString(),
+      };
+    } catch {
+      toast({ title: "Error", description: "Could not read data for backup", variant: "destructive" });
+      return;
+    }
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -61,12 +82,14 @@ export default function Settings() {
       reader.onload = (ev: any) => {
         try {
           const data = JSON.parse(ev.target.result);
-          if (data.settings) localStorage.setItem("clinicSettings", JSON.stringify(data.settings));
-          if (data.patients) localStorage.setItem("patientArchive", JSON.stringify(data.patients));
-          if (data.snapshots) localStorage.setItem("capturedSnapshots", JSON.stringify(data.snapshots));
-          if (data.plans) localStorage.setItem("treatmentPlans", JSON.stringify(data.plans));
-          setSettings(data.settings || settings);
-          toast({ title: "Imported", description: "Data restored from backup" });
+          fetch("/api/import-local", {
+            method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          }).then((r) => {
+            if (!r.ok) throw new Error();
+            if (data.settings) setSettings(data.settings);
+            toast({ title: "Imported", description: "Data restored from backup" });
+          }).catch(() => toast({ title: "Error", description: "Import failed", variant: "destructive" }));
         } catch (err) {
           toast({ title: "Error", description: "Invalid backup file", variant: "destructive" });
         }
@@ -76,12 +99,14 @@ export default function Settings() {
     input.click();
   };
 
-  const clearAllData = () => {
-    if (confirm("Are you sure? This will delete all patient data, snapshots, and plans.")) {
-      localStorage.removeItem("patientArchive");
-      localStorage.removeItem("capturedSnapshots");
-      localStorage.removeItem("treatmentPlans");
+  const clearAllData = async () => {
+    if (!confirm("Are you sure? This permanently deletes all patient data and snapshots for this account.")) return;
+    try {
+      for (const p of await patientsApi.list()) await patientsApi.remove(p.id);
+      for (const sn of await snapshotsApi.list()) await snapshotsApi.remove(sn.id);
       toast({ title: "Cleared", description: "All patient data deleted" });
+    } catch {
+      toast({ title: "Error", description: "Could not delete everything", variant: "destructive" });
     }
   };
 
@@ -144,6 +169,14 @@ export default function Settings() {
         <div className="bg-card/50 rounded-xl border border-white/10 p-6 space-y-3">
           <h2 className="text-lg font-semibold text-white">Data Management</h2>
 
+          {legacy.hasData() && (
+            <Button onClick={importBrowserData} className="w-full flex items-center justify-center gap-2 bg-primary/80 hover:bg-primary">
+              Move data saved in this browser to my account
+            </Button>
+          )}
+          <Button onClick={() => auth.logout().then(() => window.location.reload())} className="w-full flex items-center justify-center gap-2 bg-secondary hover:bg-secondary/90">
+            Sign out
+          </Button>
           <Button onClick={exportData} className="w-full flex items-center justify-center gap-2 bg-secondary hover:bg-secondary/90">
             <Download className="w-4 h-4" />
             Export All Data (Backup)
