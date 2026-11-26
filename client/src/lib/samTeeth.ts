@@ -101,6 +101,38 @@ export async function samTeeth(
   console.info(`[sam] encoder ${Math.round(performance.now() - tEnc0)} ms, load+prep ${Math.round(tEnc0 - t0)} ms`);
   const lt0 = pct(lum, 50) * 0.95;
   const rt0 = pct(red, 70);
+  const decodeAt = async (fx: number, fy: number, minIou: number): Promise<Cand | null> => {
+    const out = await dec.run({
+      image_embeddings: emb,
+      point_coords: new ort.Tensor("float32", Float32Array.from([fx * sw, fy * sh]), [1, 1, 2]),
+      point_labels: new ort.Tensor("float32", Float32Array.from([1]), [1, 1]),
+      mask_input: new ort.Tensor("float32", new Float32Array(256 * 256), [1, 1, 256, 256]),
+      has_mask_input: new ort.Tensor("float32", Float32Array.from([0]), [1]),
+      orig_im_size: new ort.Tensor("float32", Float32Array.from([oh, ow]), [2]),
+    });
+    const iou = (out.iou_predictions.data as Float32Array)[0];
+    if (iou < minIou) return null;
+    const md = out.masks.data as Float32Array;
+    const m = new Uint8Array(n);
+    let area = 0, x0 = ow, x1 = 0, y0 = oh, y1 = 0, sy = 0, sl = 0, sr = 0;
+    for (let y = 0; y < oh; y++)
+      for (let x = 0; x < ow; x++) {
+        const i = y * ow + x;
+        if (md[i] > 0) {
+          m[i] = 1;
+          area++;
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+          sy += y;
+          sl += lum[i];
+          sr += red[i];
+        }
+      }
+    if (area < 75) return null;
+    return { m, iou, area, x0, x1, y0, y1, cy: sy / area, lum: sl / area, red: sr / area };
+  };
   const G = 14;
   const rows = Math.max(4, Math.round((G * oh) / ow));
   const total = G * rows;
@@ -116,41 +148,13 @@ export async function samTeeth(
         done++;
         continue;
       }
-      const out = await dec.run({
-        image_embeddings: emb,
-        point_coords: new ort.Tensor("float32", Float32Array.from([fx * sw, fy * sh]), [1, 1, 2]),
-        point_labels: new ort.Tensor("float32", Float32Array.from([1]), [1, 1]),
-        mask_input: new ort.Tensor("float32", new Float32Array(256 * 256), [1, 1, 256, 256]),
-        has_mask_input: new ort.Tensor("float32", Float32Array.from([0]), [1]),
-        orig_im_size: new ort.Tensor("float32", Float32Array.from([oh, ow]), [2]),
-      });
-      const iou = (out.iou_predictions.data as Float32Array)[0];
       done++;
       if (done % 8 === 0) {
         onProgress?.(done / total);
         await new Promise((r) => setTimeout(r, 0));
       }
-      if (iou < 0.8) continue;
-      const md = out.masks.data as Float32Array;
-      const m = new Uint8Array(n);
-      let area = 0, x0 = ow, x1 = 0, y0 = oh, y1 = 0, sy = 0, sl = 0, sr = 0;
-      for (let y = 0; y < oh; y++)
-        for (let x = 0; x < ow; x++) {
-          const i = y * ow + x;
-          if (md[i] > 0) {
-            m[i] = 1;
-            area++;
-            if (x < x0) x0 = x;
-            if (x > x1) x1 = x;
-            if (y < y0) y0 = y;
-            if (y > y1) y1 = y;
-            sy += y;
-            sl += lum[i];
-            sr += red[i];
-          }
-        }
-      if (area < 75) continue;
-      cands.push({ m, iou, area, x0, x1, y0, y1, cy: sy / area, lum: sl / area, red: sr / area });
+      const c0 = await decodeAt(fx, fy, 0.8);
+      if (c0) cands.push(c0);
     }
   }
 
@@ -172,15 +176,43 @@ export async function samTeeth(
   // tooth gates
   const lt = pct(lum, 50) * 0.95;
   const rt = pct(red, 70);
-  const pool = keep.filter((k) => {
+  const okShape = (k: Cand) => {
     const bw = k.x1 - k.x0 + 1, bh = k.y1 - k.y0 + 1;
-    return k.area > 0.004 * n && k.area < 0.2 * n && k.area / (bw * bh) > 0.55 && k.lum > lt && k.red < rt && bh / bw > 0.6 && bh / bw < 3.5;
-  });
+    return k.area > 0.004 * n && k.area < 0.2 * n && k.area / (bw * bh) > 0.55 && bh / bw > 0.6 && bh / bw < 3.5;
+  };
+  const pool = keep.filter((k) => okShape(k) && k.lum > lt && k.red < rt);
   if (!pool.length) return null;
   const big = pool.reduce((a, b) => (b.area > a.area ? b : a));
   const bigH = big.y1 - big.y0 + 1;
-  const teeth = pool.filter((k) => Math.abs(k.cy - big.cy) < 0.55 * bigH).sort((a, b) => (a.x0 + a.x1) - (b.x0 + b.x1));
+  let teeth = pool.filter((k) => Math.abs(k.cy - big.cy) < 0.55 * bigH).sort((a, b) => (a.x0 + a.x1) - (b.x0 + b.x1));
   if (teeth.length < 3) return null;
+  // outer teeth are narrow and shadowed, so the coarse grid often misses them: probe outward along the row
+  {
+    const overl = (a: Cand, k: Cand) => Math.max(0, Math.min(a.x1, k.x1) - Math.max(a.x0, k.x0)) / Math.max(1, Math.min(a.x1 - a.x0 + 1, k.x1 - k.x0 + 1));
+    const wAvg = teeth.reduce((a, t) => a + (t.x1 - t.x0 + 1), 0) / teeth.length;
+    const rowY = teeth.reduce((a, t) => a + t.cy, 0) / teeth.length;
+    for (const dir of [-1, 1]) {
+      for (let step = 0; step < 4; step++) {
+        const edge = dir < 0 ? teeth[0] : teeth[teeth.length - 1];
+        let added: Cand | null = null;
+        for (const off of [0.3, 0.5, 0.7]) {
+          const px = dir < 0 ? edge.x0 - off * wAvg : edge.x1 + off * wAvg;
+          if (px < 2 || px > ow - 2) continue;
+          const k = await decodeAt(px / ow, rowY / oh, 0.6);
+          if (!k) continue;
+          const kw = k.x1 - k.x0 + 1, kh = k.y1 - k.y0 + 1;
+          const solid = k.area / (kw * kh);
+          const gap = dir < 0 ? edge.x0 - k.x1 : k.x0 - edge.x1;
+          const ok = k.area > 0.001 * n && k.area < 0.05 * n && solid > 0.45 && kh / kw > 0.5 && kh / kw < 4.5 &&
+            kw > 0.3 * wAvg && kw < 1.6 * wAvg && kh < 1.8 * (edge.y1 - edge.y0 + 1) && gap > -0.2 * wAvg && gap < 0.5 * wAvg &&
+            !teeth.some((t) => overl(t, k) > 0.25) && k.lum > lt * 0.7 && k.red < rt * 1.3 && Math.abs(k.cy - rowY) < 0.7 * kh + 0.3 * (edge.y1 - edge.y0 + 1);
+          if (ok) { added = k; break; }
+        }
+        if (!added) break;
+        teeth = [...teeth, added].sort((a, b) => (a.x0 + a.x1) - (b.x0 + b.x1));
+      }
+    }
+  }
 
   // labels in canvas coordinates; smaller masks win overlaps
   const labels = new Int32Array(canvas.width * canvas.height);
