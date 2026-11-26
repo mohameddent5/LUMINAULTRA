@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Loader2 } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import AppShell from "@/components/AppShell";
+import { AuthGate } from "@/components/AuthGate";
 
 /**
  * Pages are split into their own chunks. The home screen no longer has to
@@ -26,6 +27,7 @@ const Validation = lazy(() => import("@/pages/validation"));
 const Model = lazy(() => import("@/pages/model"));
 const PatientComparison = lazy(() => import("@/pages/patient-comparison"));
 const CareJourney = lazy(() => import("@/pages/care-journey"));
+const Annotate = lazy(() => import("@/pages/annotate"));
 
 function RouteFallback() {
   return (
@@ -55,6 +57,7 @@ function Router() {
         <Route path="/model" component={Model} />
         <Route path="/patient-comparison" component={PatientComparison} />
         <Route path="/care-journey" component={CareJourney} />
+        <Route path="/annotate" component={Annotate} />
         <Route component={NotFound} />
       </Switch>
     </Suspense>
@@ -66,9 +69,11 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
-        <AppShell>
-          <Router />
-        </AppShell>
+        <AuthGate>
+          <AppShell>
+            <Router />
+          </AppShell>
+        </AuthGate>
       </TooltipProvider>
     </QueryClientProvider>
   );

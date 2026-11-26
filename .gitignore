@@ -5,3 +5,14 @@ server/public
 vite.config.ts.*
 *.tar.gz
 .vercel
+
+# secrets and local tooling state
+.env
+.env.*
+!.env.example
+.local/
+
+# private patient photos and label exports
+/private/
+*.landmarks.json
+landmarks-*.json
