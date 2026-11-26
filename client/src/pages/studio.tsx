@@ -764,6 +764,27 @@ function paintAfter(
   } else renderAfter(o, out, region, opt.level);
 }
 
+/** Share of upper teeth with visible pink gum right above them. Lip is darker and redder, so only light, low-saturation pink counts. */
+function gumVisibleShare(o: HTMLCanvasElement, region: Region, up: { cx: number; bw: number; by: number; bh: number }[]): number {
+  const g = o.getContext("2d");
+  if (!g || !up.length) return 0;
+  let seen = 0;
+  for (const t of up) {
+    const h = Math.max(4, Math.round(t.bh * 0.2));
+    const w = Math.max(4, Math.round(t.bw * 0.5));
+    const x = Math.round(t.cx + region.x0 - w / 2), y = Math.round(t.by + region.y0 - h);
+    if (x < 0 || y < 0 || x + w > o.width || y + h > o.height) continue;
+    const d = g.getImageData(x, y, w, h).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i], gg = d[i + 1], b = d[i + 2], sat = (r - gg) / Math.max(1, r);
+      if (r > 150 && sat > 0.18 && sat < 0.5 && b > gg * 0.8 && b < r) n++;
+    }
+    if (n / (w * h) > 0.35) seen++;
+  }
+  return seen / up.length;
+}
+
 function drawGuides(
   cv: HTMLCanvasElement,
   o: HTMLCanvasElement,
@@ -869,7 +890,8 @@ function drawGuides(
       }
       g.stroke();
       g.setLineDash([]);
-      // gum line: where each upper tooth meets the gum, joined by a pink line with a dot at each tooth
+      // gum line only when gum is actually visible in this smile; hidden gum means no line and no guess
+      if (gumVisibleShare(o, region, up) >= 0.5) {
       g.strokeStyle = "#f472b6";
       g.fillStyle = "#f472b6";
       g.lineWidth = lw;
@@ -883,6 +905,7 @@ function drawGuides(
         g.beginPath();
         g.arc(t.cx + region.x0, t.by + region.y0, lw * 2.2, 0, Math.PI * 2);
         g.fill();
+      }
       }
     }
     // dental midline between the two most central teeth
