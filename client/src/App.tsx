@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
+import Studio from "@/pages/studio";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -44,7 +45,7 @@ function Router() {
   return (
     <Suspense fallback={<RouteFallback />}>
       <Switch>
-        <Route path="/" component={HomeLanding} />
+        <Route path="/workspace" component={HomeLanding} />
         <Route path="/scanner" component={Scanner} />
         <Route path="/treatment-planner" component={TreatmentPlanner} />
         <Route path="/patient-archive" component={PatientArchive} />
@@ -64,15 +65,23 @@ function Router() {
   );
 }
 
+function Frame() {
+  const [path] = useLocation();
+  if (path === "/") return <Studio />;
+  return (
+    <AppShell>
+      <Router />
+    </AppShell>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
         <AuthGate>
-          <AppShell>
-            <Router />
-          </AppShell>
+          <Frame />
         </AuthGate>
       </TooltipProvider>
     </QueryClientProvider>

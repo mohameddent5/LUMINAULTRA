@@ -31,7 +31,8 @@ const SECTIONS: NavSection[] = [
   {
     title: "Workspace",
     items: [
-      { href: "/", label: "Home", icon: Home, hint: "Workspace overview" },
+      { href: "/", label: "Smile Studio", icon: Sparkles, hint: "Guided chair-side flow" },
+      { href: "/workspace", label: "Workspace", icon: Home, hint: "Overview" },
       { href: "/care-journey", label: "Screening to care", icon: Activity, hint: "Referral, booking, follow-up" },
       { href: "/clinical-dashboard", label: "Clinical dashboard", icon: LayoutDashboard, hint: "Practice activity" },
     ],
@@ -63,7 +64,7 @@ const SECTIONS: NavSection[] = [
 ];
 
 const PAGE_META: Record<string, { title: string; subtitle: string }> = {
-  "/": { title: "Home", subtitle: "Your clinical workspace" },
+  "/workspace": { title: "Workspace", subtitle: "Your clinical workspace" },
   "/care-journey": { title: "Screening to care", subtitle: "From a screening result to completed care" },
   "/clinical-dashboard": { title: "Clinical dashboard", subtitle: "Practice activity and standards" },
   "/scanner": { title: "AR scanner", subtitle: "Live facial and smile analysis" },
@@ -79,7 +80,7 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
 };
 
 function isActive(path: string, href: string): boolean {
-  if (href === "/") return path === "/";
+  if (href === "/" || href === "/workspace") return path === href;
   return path === href || path.startsWith(href + "/");
 }
 
@@ -186,7 +187,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="lg:pl-64 flex flex-col min-h-screen">
         {/* Global header */}
-        <header className="sticky top-0 z-30 h-16 flex items-center gap-3 px-4 sm:px-6 border-b border-white/10 bg-background/85 backdrop-blur-md">
+        <header className="sticky top-0 z-30 h-16 flex items-center gap-3 px-4 sm:px-6 pr-16 border-b border-white/10 bg-background/85 backdrop-blur-md">
           <button
             onClick={() => setMobileOpen(true)}
             aria-label="Open menu"

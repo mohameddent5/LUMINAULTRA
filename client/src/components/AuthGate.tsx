@@ -64,7 +64,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
             Changes are not saving to the server. Check your connection; do not clear this browser's data yet.
           </div>
         )}
-        <button onClick={signOut} className="fixed top-2 right-2 z-[100] text-[10px] text-white/50 hover:text-white underline">
+        <button onClick={signOut} className="fixed top-1 right-1 z-[100] text-xs px-2 py-1 text-white/70 hover:text-white underline">
           Sign out
         </button>
       </>
