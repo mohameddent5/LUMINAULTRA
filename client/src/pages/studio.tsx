@@ -18,6 +18,8 @@ import {
   Type,
   UserRound,
 } from "lucide-react";
+import { segmentTeeth, renderTeeth, whitenInPlace, type TeethEngine } from "@/lib/smileEngine";
+import { evaluateCapture, type CaptureQuality } from "@/lib/captureQuality";
 
 /* ------------------------------------------------------------------ text */
 
@@ -69,6 +71,33 @@ const T = {
     foundMouth: "Smile found.",
     retake: "Retake photo",
     levelOf: ["Very subtle", "Natural", "Fresh", "Bright", "Very bright"],
+    shapeTitle: "Shape tools",
+    smooth: "Smooth edges",
+    smoothHint: "Closes chips and uneven edges",
+    straighten: "Straighten",
+    straightenHint: "Turns tilted teeth toward the row",
+    balance: "Balance sizes",
+    balanceHint: "Grows small teeth toward their neighbours",
+    shapeRefused: "Shape tools are off: not enough clear, separate teeth in this photo to reshape them honestly.",
+    relGood: "Reliable preview",
+    relGoodWhy: "Sharp, well lit, teeth clearly visible.",
+    relLow: "Low-confidence preview",
+    relLowWhy: "Treat this as a rough idea only. Retake for a reliable one:",
+    rotate: "Rotate photo",
+    live_ready: "Ready. Hold still.",
+    live_light: "More light, please.",
+    live_dark: "Too bright or too dark. Change the light.",
+    live_blur: "Hold still. The picture is soft.",
+    live_teeth: "Show the teeth: smile wider or retract the lips.",
+    live_closer: "Move closer.",
+    burstBtn: "Capture best smile",
+    burstHint: "Takes a 2 second burst and keeps the best frame.",
+    singleBtn: "Single photo",
+    bursting: "Smile! Hold still...",
+    picking: "Choosing the best frame...",
+    caseId: "Case ID",
+    verified: "Capture verified",
+    unverified: "Low-confidence capture",
     n_close: "Close-up photo: teeth were found by colour. Check the preview looks right.",
     n_teeth_ok: "Teeth are visible.",
     n_teeth_no: "Few teeth are showing. Ask for a bigger smile and retake for a better preview.",
@@ -134,6 +163,33 @@ const T = {
     foundMouth: "تم إيجاد الابتسامة.",
     retake: "إعادة التقاط",
     levelOf: ["هادئ جداً", "طبيعي", "منتعش", "ناصع", "ناصع جداً"],
+    shapeTitle: "Shape tools",
+    smooth: "Smooth edges",
+    smoothHint: "Closes chips and uneven edges",
+    straighten: "Straighten",
+    straightenHint: "Turns tilted teeth toward the row",
+    balance: "Balance sizes",
+    balanceHint: "Grows small teeth toward their neighbours",
+    shapeRefused: "Shape tools are off: not enough clear, separate teeth in this photo to reshape them honestly.",
+    relGood: "Reliable preview",
+    relGoodWhy: "Sharp, well lit, teeth clearly visible.",
+    relLow: "Low-confidence preview",
+    relLowWhy: "Treat this as a rough idea only. Retake for a reliable one:",
+    rotate: "Rotate photo",
+    live_ready: "Ready. Hold still.",
+    live_light: "More light, please.",
+    live_dark: "Too bright or too dark. Change the light.",
+    live_blur: "Hold still. The picture is soft.",
+    live_teeth: "Show the teeth: smile wider or retract the lips.",
+    live_closer: "Move closer.",
+    burstBtn: "Capture best smile",
+    burstHint: "Takes a 2 second burst and keeps the best frame.",
+    singleBtn: "Single photo",
+    bursting: "Smile! Hold still...",
+    picking: "Choosing the best frame...",
+    caseId: "Case ID",
+    verified: "Capture verified",
+    unverified: "Low-confidence capture",
     n_close: "صورة مقرّبة: تم إيجاد الأسنان بحسب اللون. تأكد أن المعاينة تبدو سليمة.",
     n_teeth_ok: "الأسنان ظاهرة.",
     n_teeth_no: "الأسنان قليلة الظهور. اطلب ابتسامة أكبر وأعد التقاط الصورة لمعاينة أفضل.",
@@ -421,29 +477,17 @@ function renderAfter(original: HTMLCanvasElement, out: HTMLCanvasElement, region
   ctx.drawImage(original, 0, 0);
   if (!region || level <= 0) return;
   const img = new ImageData(new Uint8ClampedArray(region.base.data), region.w, region.h);
-  const d = img.data;
+  for (let i = 0; i < region.w * region.h; i++) img.data[i * 4 + 3] = Math.round(region.mask[i] * 255);
+  whitenInPlace(img.data, level);
+  // put back with full alpha so the photo underneath is replaced, not blended
   for (let i = 0; i < region.w * region.h; i++) {
     const m = region.mask[i];
-    if (m <= 0.01) continue;
-    let r = d[i * 4];
-    let g = d[i * 4 + 1];
-    let b = d[i * 4 + 2];
-    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-    const k = m * level;
-    // remove colour cast toward the tooth's own grey, then lift the light.
-    const desat = 1 - 0.85 * k;
-    r = lum + (r - lum) * desat;
-    g = lum + (g - lum) * desat;
-    b = lum + (b - lum) * desat;
-    // slight cool shift so the whites do not look cream
-    b += 6 * k;
-    const lift = 0.42 * k * (0.35 + 0.65 * (lum / 255));
-    r += (255 - r) * lift;
-    g += (255 - g) * lift;
-    b += (255 - b) * lift;
-    d[i * 4] = r;
-    d[i * 4 + 1] = g;
-    d[i * 4 + 2] = b;
+    if (m <= 0.01) {
+      img.data[i * 4] = region.base.data[i * 4];
+      img.data[i * 4 + 1] = region.base.data[i * 4 + 1];
+      img.data[i * 4 + 2] = region.base.data[i * 4 + 2];
+    }
+    img.data[i * 4 + 3] = 255;
   }
   ctx.putImageData(img, region.x0, region.y0);
 }
@@ -459,7 +503,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-function toCanvas(img: CanvasImageSource, iw: number, ih: number, maxW = 1280): HTMLCanvasElement {
+function toCanvas(img: CanvasImageSource, iw: number, ih: number, maxW = 1000): HTMLCanvasElement {
   const s = Math.min(1, maxW / iw);
   const c = document.createElement("canvas");
   c.width = Math.round(iw * s);
@@ -486,6 +530,62 @@ function clinicName(): string {
 }
 
 /* ------------------------------------------------------------- component */
+
+function lumaOf(c: HTMLCanvasElement): Uint8Array {
+  const d = c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
+  const out = new Uint8Array(c.width * c.height);
+  for (let i = 0; i < out.length; i++) out[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  return out;
+}
+
+type Graded = {
+  c: HTMLCanvasElement;
+  analysis: Analysis;
+  region: Region | null;
+  engine: TeethEngine | null;
+  quality: CaptureQuality;
+  teethPx: number;
+};
+
+function regrade(c: HTMLCanvasElement, analysis: Analysis, region: Region | null): Graded {
+  const engine = region ? segmentTeeth(region) : null;
+  let pts: { x: number; y: number }[] | undefined;
+  if (analysis.close && engine && region) {
+    const x0 = Math.min(...engine.teeth.map((t) => t.bx)) + region.x0;
+    const x1 = Math.max(...engine.teeth.map((t) => t.bx + t.bw)) + region.x0;
+    pts = [
+      { x: x0 / c.width, y: 0.5 },
+      { x: x1 / c.width, y: 0.5 },
+    ];
+  } else if (!analysis.close) {
+    pts = analysis.polygon.map((p) => ({ x: p.x / c.width, y: p.y / c.height }));
+  }
+  const quality = evaluateCapture({
+    luma: lumaOf(c),
+    width: c.width,
+    height: c.height,
+    mouthPoints: pts,
+    teethCount: engine ? engine.teeth.length : 0,
+  });
+  return { c, analysis, region, engine, quality, teethPx: engine ? engine.teeth.reduce((a, t) => a + t.area, 0) : 0 };
+}
+
+async function gradeFrame(c: HTMLCanvasElement): Promise<Graded> {
+  const a = await findSmile(c);
+  let region: Region | null;
+  if (a.close) {
+    a.seed = autoSeed(c);
+    region = buildSeeded(c, a.seed);
+  } else region = buildRegion(c, a.polygon);
+  return regrade(c, a, region);
+}
+
+async function sha256(c: HTMLCanvasElement): Promise<string> {
+  const blob: Blob | null = await new Promise((r) => c.toBlob(r, "image/png"));
+  if (!blob) return "";
+  const h = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+  return Array.from(new Uint8Array(h)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 const LOOKS = [
   { key: "natural", level: 0.35 },
@@ -522,6 +622,16 @@ export default function Studio() {
   const [saved, setSaved] = useState(false);
   const [msg, setMsg] = useState("");
   const [hasPhoto, setHasPhoto] = useState(false);
+  const [engine, setEngine] = useState<TeethEngine | null>(null);
+  const [quality, setQuality] = useState<CaptureQuality | null>(null);
+  const [smooth, setSmooth] = useState(false);
+  const [straighten, setStraighten] = useState(false);
+  const [balance, setBalance] = useState(false);
+  const [live, setLive] = useState<{ ok: boolean; text: string } | null>(null);
+  const [burstMsg, setBurstMsg] = useState("");
+  const [caseId, setCaseId] = useState("");
+  const sourceRef = useRef<"file" | "camera-single" | "camera-burst">("file");
+  const shapeOk = !!engine && engine.teeth.length >= 4 && engine.medianSolidity >= 0.9 && !!quality && quality.signals.find((x) => x.id === "sharpness")!.ok;
 
   useEffect(() => {
     document.documentElement.lang = lang;
@@ -570,23 +680,35 @@ export default function Studio() {
   );
 
   /* process a photo */
-  const process = useCallback(async (c: HTMLCanvasElement) => {
-    setBusy(true);
-    setSaved(false);
-    originalRef.current = c;
+  const apply = useCallback((g: Graded) => {
+    originalRef.current = g.c;
     setHasPhoto(true);
-    const a = await findSmile(c);
-    setAnalysis(a);
-    if (a.close) {
-      a.seed = autoSeed(c);
-      setRegion(buildSeeded(c, a.seed));
-    } else setRegion(buildRegion(c, a.polygon));
-    setBusy(false);
-    setStep(2);
+    setAnalysis(g.analysis);
+    setRegion(g.region);
+    setEngine(g.engine);
+    setQuality(g.quality);
+    setSmooth(false);
+    setStraighten(false);
+    setBalance(false);
+    setCaseId("");
+    void sha256(g.c).then((h) => setCaseId(h.slice(0, 10)));
   }, []);
+
+  const process = useCallback(
+    async (c: HTMLCanvasElement) => {
+      setBusy(true);
+      setSaved(false);
+      setMsg("");
+      apply(await gradeFrame(c));
+      setBusy(false);
+      setStep(2);
+    },
+    [apply],
+  );
 
   const onFile = async (f: File | undefined) => {
     if (!f) return;
+    sourceRef.current = "file";
     const url = URL.createObjectURL(f);
     try {
       const im = await loadImage(url);
@@ -599,10 +721,95 @@ export default function Studio() {
   const snap = async () => {
     const v = videoRef.current;
     if (!v || !v.videoWidth) return;
+    sourceRef.current = "camera-single";
     const c = toCanvas(v, v.videoWidth, v.videoHeight);
     stopCamera();
     await process(c);
   };
+
+  const burst = async () => {
+    const v = videoRef.current;
+    if (!v || !v.videoWidth) return;
+    const frames: HTMLCanvasElement[] = [];
+    setBurstMsg(t.bursting);
+    for (let i = 0; i < 10; i++) {
+      frames.push(toCanvas(v, v.videoWidth, v.videoHeight, 800));
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    stopCamera();
+    setBusy(true);
+    setBurstMsg(t.picking);
+    const graded: Graded[] = [];
+    for (const f of frames) graded.push(await gradeFrame(f));
+    const good = graded.filter((g) => g.quality.acceptable);
+    const pool = good.length ? good : graded;
+    const peak = (g: Graded) => g.quality.score * 0.6 + Math.min(1, g.teethPx / (g.c.width * g.c.height) / 0.08) * 0.4;
+    let best = pool[0];
+    for (const g of pool) if (peak(g) > peak(best)) best = g;
+    sourceRef.current = "camera-burst";
+    setBurstMsg("");
+    setSaved(false);
+    setMsg("");
+    apply(best);
+    setBusy(false);
+    setStep(2);
+  };
+
+  const rotate = async () => {
+    const o = originalRef.current;
+    if (!o) return;
+    const c = document.createElement("canvas");
+    c.width = o.height;
+    c.height = o.width;
+    const x = c.getContext("2d")!;
+    x.translate(c.width, 0);
+    x.rotate(Math.PI / 2);
+    x.drawImage(o, 0, 0);
+    setBusy(true);
+    apply(await gradeFrame(c));
+    setBusy(false);
+  };
+
+  /* live capture gate */
+  useEffect(() => {
+    if (!cameraOn) {
+      setLive(null);
+      return;
+    }
+    let stop = false;
+    let running = false;
+    const tick = async () => {
+      const v = videoRef.current;
+      if (stop || running || !v || !v.videoWidth) return;
+      running = true;
+      try {
+        const g = await gradeFrame(toCanvas(v, v.videoWidth, v.videoHeight, 640));
+        if (stop) return;
+        const bad = g.quality.signals.find((x) => !x.ok);
+        const text = !bad
+          ? t.live_ready
+          : bad.id === "sharpness"
+            ? t.live_blur
+            : bad.id === "exposure"
+              ? t.live_dark
+              : bad.id === "resolution"
+                ? t.live_closer
+                : g.engine && g.engine.teeth.length > 0
+                  ? t.live_closer
+                  : t.live_teeth;
+        setLive({ ok: !bad, text });
+      } catch {
+        /* keep last status */
+      } finally {
+        running = false;
+      }
+    };
+    const id = setInterval(tick, 900);
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, [cameraOn, t]);
 
   /* redraw */
   useEffect(() => {
@@ -612,8 +819,15 @@ export default function Studio() {
     beforeShow.current.width = o.width;
     beforeShow.current.height = o.height;
     beforeShow.current.getContext("2d")!.drawImage(o, 0, 0);
-    renderAfter(o, afterRef.current, region, level);
-  }, [step, region, level, hasPhoto]);
+    if (engine && region && (smooth || straighten || balance)) {
+      const out = afterRef.current;
+      out.width = o.width;
+      out.height = o.height;
+      const ctx = out.getContext("2d")!;
+      ctx.drawImage(o, 0, 0);
+      renderTeeth(engine, ctx, region.x0, region.y0, { level, smooth, straighten, balance });
+    } else renderAfter(o, afterRef.current, region, level);
+  }, [step, region, level, hasPhoto, engine, smooth, straighten, balance]);
 
   const dragMoves = useRef(false);
   const tapSeed = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -622,8 +836,13 @@ export default function Studio() {
     const r = e.currentTarget.getBoundingClientRect();
     const seed = { x: ((e.clientX - r.left) / r.width) * o.width, y: ((e.clientY - r.top) / r.height) * o.height };
     dragMoves.current = true;
-    setAnalysis({ ...analysis, seed });
-    setRegion(buildSeeded(o, seed));
+    const na = { ...analysis, seed };
+    const reg = buildSeeded(o, seed);
+    const g = regrade(o, na, reg);
+    setAnalysis(na);
+    setRegion(reg);
+    setEngine(g.engine);
+    setQuality(g.quality);
   };
   const tapMouth = (e: React.PointerEvent<HTMLDivElement>) => {
     const o = originalRef.current;
@@ -687,7 +906,8 @@ export default function Studio() {
     x.font = "22px sans-serif";
     x.fillStyle = "#cbd5e1";
     const clinic = clinicName();
-    x.fillText(`${clinic ? clinic + "  |  " : ""}Visual preview made by software. Not a guarantee of the final result.`, 18, h + 56);
+    x.fillText(`${clinic ? clinic + "  |  " : ""}Visual preview made by software. Not a guarantee of the final result.`, 18, h + 40);
+    x.fillText(`${quality?.acceptable ? "Capture verified" : "Low-confidence capture"}  |  Consent recorded${caseId ? "  |  Case " + caseId : ""}`, 18, h + 72);
     return c;
   };
 
@@ -737,6 +957,17 @@ export default function Studio() {
             "Clinician confirmed the patient was told what is captured, why, and how long it is kept, and agreed.",
         },
         studio: { before: thumb(o), after: thumb(a), look: levelWord, lookLevel: Math.round(level * 100) / 100 },
+        audit: {
+          engine: "smile-studio/1",
+          capturedAt: when.toISOString(),
+          source: sourceRef.current,
+          photoSha256Prefix: caseId,
+          consentAt: consentAt.current,
+          capture: quality
+            ? { verified: quality.acceptable, reasons: quality.reasons, signals: quality.signals.map((x) => ({ id: x.id, ok: x.ok })) }
+            : null,
+          edits: { whiteningLevel: Math.round(level * 100) / 100, smooth, straighten, balance },
+        },
         notes: "Smile Studio preview",
         clinicalNotes: "",
         visitHistory: [{ date: when.toLocaleDateString(), harmony: 0, notes: "Smile Studio preview" }],
@@ -894,10 +1125,22 @@ export default function Studio() {
                     <div className="w-[48%] aspect-[3/4] rounded-[50%] border-4 border-dashed border-white/60" />
                   </div>
                 </div>
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className={`rounded-xl p-3 font-semibold text-center ${
+                    live?.ok ? "bg-emerald-400 text-black" : "bg-yellow-300 text-black"
+                  }`}
+                >
+                  {burstMsg || live?.text || t.reading}
+                </p>
                 <div className="flex gap-3 flex-wrap">
-                  <button className={`${primary} flex-1`} onClick={snap}>
+                  <button className={`${primary} flex-1`} onClick={burst} disabled={!!burstMsg}>
                     <Camera className="w-6 h-6" aria-hidden />
-                    {t.shutter}
+                    {t.burstBtn}
+                  </button>
+                  <button className={ghost} onClick={snap} disabled={!!burstMsg}>
+                    {t.singleBtn}
                   </button>
                   <button className={ghost} onClick={() => startCamera(facing === "user" ? "environment" : "user")}>
                     <RefreshCw className="w-5 h-5" aria-hidden />
@@ -1015,6 +1258,37 @@ export default function Studio() {
                     {t.tapMouth}
                   </p>
                 )}
+                {quality && (
+                  <div
+                    role="status"
+                    className={`rounded-2xl p-4 border-2 ${
+                      quality.acceptable
+                        ? hc ? "border-white" : "border-emerald-400/70 bg-emerald-400/10"
+                        : hc ? "border-yellow-300" : "border-yellow-300/80 bg-yellow-300/10"
+                    }`}
+                  >
+                    <p className="font-bold flex items-center gap-2">
+                      {quality.acceptable ? (
+                        <ShieldCheck className="w-6 h-6 text-emerald-300" aria-hidden />
+                      ) : (
+                        <span aria-hidden>⚠</span>
+                      )}
+                      {quality.acceptable ? t.relGood : t.relLow}
+                    </p>
+                    {quality.acceptable ? (
+                      <p className={`text-base ${muted}`}>{t.relGoodWhy}</p>
+                    ) : (
+                      <>
+                        <p className={`text-base ${muted}`}>{t.relLowWhy}</p>
+                        <ul className={`text-base list-disc ps-6 ${muted}`}>
+                          {quality.reasons.map((x) => (
+                            <li key={x}>{x}</li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                  </div>
+                )}
                 <div className={`rounded-2xl p-5 space-y-4 ${card}`}>
                   <h2 className="font-semibold">{t.looks}</h2>
                   <div className="grid grid-cols-3 gap-3" role="radiogroup" aria-label={t.looks}>
@@ -1063,6 +1337,39 @@ export default function Studio() {
                   </div>
                 </div>
 
+                <div className={`rounded-2xl p-5 space-y-3 ${card}`} data-solidity={engine ? engine.medianSolidity.toFixed(2) : ""} data-teeth={engine ? engine.teeth.length : 0}>
+                  <h2 className="font-semibold">{t.shapeTitle}</h2>
+                  {!shapeOk && <p className="text-yellow-300 text-base">{t.shapeRefused}</p>}
+                  <div className="grid sm:grid-cols-3 gap-3">
+                    {[
+                      { k: "smooth", on: smooth, set: setSmooth, label: t.smooth, hint: t.smoothHint },
+                      { k: "straighten", on: straighten, set: setStraighten, label: t.straighten, hint: t.straightenHint },
+                      { k: "balance", on: balance, set: setBalance, label: t.balance, hint: t.balanceHint },
+                    ].map((x) => (
+                      <button
+                        key={x.k}
+                        role="switch"
+                        aria-checked={x.on}
+                        disabled={!shapeOk}
+                        onClick={() => x.set(!x.on)}
+                        className={`min-h-[72px] rounded-2xl px-3 py-2 text-start focus:outline-none focus-visible:ring-4 focus-visible:ring-yellow-300 disabled:opacity-40 ${
+                          x.on ? (hc ? "bg-yellow-300 text-black" : "bg-cyan-400 text-slate-900") : hc ? "border-2 border-white" : "border border-white/25 hover:bg-white/10"
+                        }`}
+                      >
+                        <span className="block font-bold text-lg">
+                          {x.on && <Check className="inline w-5 h-5 me-1" aria-hidden />}
+                          {x.label}
+                        </span>
+                        <span className="block text-sm opacity-90">{x.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <button className={ghost} onClick={rotate}>
+                    <RefreshCw className="w-5 h-5" aria-hidden />
+                    {t.rotate}
+                  </button>
+                </div>
+
                 <div className={`rounded-2xl p-5 ${card}`}>
                   <h2 className="font-semibold mb-2">{t.notes}</h2>
                   <ul className={`space-y-2 ${muted}`}>
@@ -1083,6 +1390,7 @@ export default function Studio() {
                   <ShieldCheck className="w-5 h-5 text-emerald-300" aria-hidden />
                   {t.consentOn}
                   {name.trim() ? ` · ${name.trim()}` : ""}
+                  {caseId ? ` · ${t.caseId} ${caseId}` : ""}
                 </p>
                 <div className="grid sm:grid-cols-3 gap-3">
                   <button className={primary} onClick={save} disabled={saved}>
