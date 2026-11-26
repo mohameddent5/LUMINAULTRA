@@ -1735,6 +1735,11 @@ End of summary
             ([, value]) => typeof value === "number",
           ),
         ),
+        // Consent record: when the clinician confirmed, before the camera opened, that the patient agreed.
+        consent: {
+          confirmedAt: sessionStorage.getItem("scanConsentAt") || null,
+          statement: "Clinician confirmed the patient was told what is captured, why, and how long it is kept, and agreed.",
+        },
         notes: analysis?.classificationNotes || "DSD capture",
         clinicalNotes: analysis?.clinicalRecommendations?.join("\n") ?? "",
         visitHistory: [

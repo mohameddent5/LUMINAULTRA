@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ARCanvas } from "@/components/ARCanvas";
 
 const KEY = "scanConsentConfirmed";
+export const CONSENT_AT_KEY = "scanConsentAt";
 
 /** Consent step before the camera opens (patient data law: consent and purpose must come first). */
 export default function Scanner() {
@@ -32,7 +33,7 @@ export default function Scanner() {
         </label>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => navigate("/")}>Back</Button>
-          <Button disabled={!checked} onClick={() => { sessionStorage.setItem(KEY, "1"); setOk(true); }}>Start scan</Button>
+          <Button disabled={!checked} onClick={() => { sessionStorage.setItem(KEY, "1"); sessionStorage.setItem(CONSENT_AT_KEY, new Date().toISOString()); setOk(true); }}>Start scan</Button>
         </div>
       </div>
     </div>

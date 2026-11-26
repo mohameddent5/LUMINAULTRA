@@ -154,7 +154,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <span className="w-2 h-2 rounded-full bg-emerald-400" />
             <div className="min-w-0">
               <p className="text-[11px] font-medium text-white truncate">Clinical workspace</p>
-              <p className="text-[10px] text-muted-foreground">On-device data · v1.0</p>
+              <p className="text-[10px] text-muted-foreground">Saved to your account · v1.0</p>
             </div>
           </div>
         </div>
@@ -200,7 +200,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="hidden sm:flex items-center gap-2">
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground border border-white/10 rounded-full px-2.5 py-1">
-              v1.0 clinical grade
+              v1.0 design aid
             </span>
             <Link
               href="/care-journey"
@@ -215,7 +215,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         <footer className="border-t border-white/10 px-4 sm:px-6 py-4 flex flex-col sm:flex-row gap-1 sm:items-center sm:justify-between text-[11px] text-muted-foreground">
           <p>Lumina Ultra — Clinical DSD platform · measurements validated against peer-reviewed protocols</p>
-          <p>Clinical decision support, not a diagnosis. Data stays on this device.</p>
+          <p>Clinical decision support, not a diagnosis. Data is saved to your clinic account.</p>
         </footer>
       </div>
     </div>
