@@ -214,6 +214,26 @@ export async function samTeeth(
     }
   }
 
+  // masks often leak a little into the dark gap beside the tooth (a diastema, a shadow): trim edge columns that are clearly darker than the tooth
+  for (const t of teeth) {
+    const med = (() => { const v: number[] = []; for (let i = 0; i < n; i++) if (t.m[i]) v.push(lum[i]); v.sort((a, b) => a - b); return v[Math.floor(v.length / 2)] || 0; })();
+    const colMean = (x: number) => { let sum = 0, c = 0; for (let y = t.y0; y <= t.y1; y++) { const i = y * ow + x; if (t.m[i]) { sum += lum[i]; c++; } } return c ? sum / c : -1; };
+    const colCnt = (x: number) => { let c = 0; for (let y = t.y0; y <= t.y1; y++) if (t.m[y * ow + x]) c++; return c; };
+    const maxTrim = Math.round(0.2 * (t.x1 - t.x0 + 1));
+    let l = 0;
+    while (l < maxTrim && colMean(t.x0 + l) < 0.72 * med) l++;
+    let r = 0;
+    while (r < maxTrim && colMean(t.x1 - r) < 0.72 * med) r++;
+    if (l || r) {
+      for (let y = t.y0; y <= t.y1; y++) {
+        for (let k = 0; k < l; k++) t.m[y * ow + t.x0 + k] = 0;
+        for (let k = 0; k < r; k++) t.m[y * ow + t.x1 - k] = 0;
+      }
+      t.x0 += l; t.x1 -= r;
+    }
+    void colCnt;
+  }
+
   // labels in canvas coordinates; smaller masks win overlaps
   const labels = new Int32Array(canvas.width * canvas.height);
   const order = teeth.map((t, i) => ({ t, id: i + 1 })).sort((a, b) => b.t.area - a.t.area);
