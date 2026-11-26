@@ -16,7 +16,7 @@ const NAMES = [
   ...UPPER.map((t) => `dis${t}`),
 ];
 type Pt = { name: string; x: number; y: number; refused?: "vis" | "occluded" | "ambiguous" };
-type Doc = { file: string; width: number; height: number; points: Pt[] };
+type Doc = { file: string; width: number; height: number; points: Pt[]; teeth?: [number, number][][] };
 
 export default function Annotate() {
   const [, navigate] = useLocation();
@@ -26,6 +26,8 @@ export default function Annotate() {
   const [files, setFiles] = useState<File[]>([]);
   const [idx, setIdx] = useState(0);
   const [current, setCurrent] = useState(NAMES[0]);
+  const [mode, setMode] = useState<"points" | "outline">("points");
+  const [poly, setPoly] = useState<[number, number][]>([]);
   const [refuse, setRefuse] = useState<"" | "vis" | "occluded" | "ambiguous">("");
   const file = files[idx];
   const doc = file ? docs[file.name] : undefined;
@@ -40,6 +42,15 @@ export default function Annotate() {
     ctx.drawImage(img, 0, 0);
     const r = Math.max(4, c.width / 220);
     ctx.font = `${Math.max(12, c.width / 60)}px sans-serif`;
+    const tracePoly = (pts: [number, number][], closed: boolean, col: string) => {
+      if (!pts.length) return;
+      ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      if (closed) ctx.closePath();
+      ctx.lineWidth = Math.max(2, r / 2); ctx.strokeStyle = col; ctx.stroke();
+      if (closed) { ctx.fillStyle = col + "33"; ctx.fill(); }
+    };
+    (doc?.teeth ?? []).forEach((t) => tracePoly(t, true, "#38bdf8"));
+    tracePoly(poly, false, "#f472b6");
     for (const p of doc?.points ?? []) {
       ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.lineWidth = Math.max(2, r / 2);
@@ -61,20 +72,26 @@ export default function Annotate() {
     img.src = url;
     return () => URL.revokeObjectURL(url);
   }, [file]);
-  useEffect(draw, [docs, idx]);
+  useEffect(draw, [docs, idx, poly]);
 
   const click = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!file || !doc) return;
     const c = canvasRef.current!, b = c.getBoundingClientRect();
     const x = Math.round(((e.clientX - b.left) / b.width) * c.width);
     const y = Math.round(((e.clientY - b.top) / b.height) * c.height);
+    if (mode === "outline") { setPoly([...poly, [x, y]]); return; }
     const points = [...doc.points.filter((p) => p.name !== current), { name: current, x, y, refused: refuse || undefined }];
     setDocs({ ...docs, [file.name]: { ...doc, points } });
     const next = NAMES.find((n) => n !== current && !points.some((p) => p.name === n));
     if (next) setCurrent(next);
   };
 
-  const undo = () => doc && setDocs({ ...docs, [file!.name]: { ...doc, points: doc.points.slice(0, -1) } });
+  const closeTooth = () => {
+    if (!doc || poly.length < 3) return;
+    setDocs({ ...docs, [file!.name]: { ...doc, teeth: [...(doc.teeth ?? []), poly] } });
+    setPoly([]);
+  };
+  const undo = () => mode === "outline" ? (poly.length ? setPoly(poly.slice(0, -1)) : doc && setDocs({ ...docs, [file!.name]: { ...doc, teeth: (doc.teeth ?? []).slice(0, -1) } })) : doc && setDocs({ ...docs, [file!.name]: { ...doc, points: doc.points.slice(0, -1) } });
   const exportJson = () => {
     const blob = new Blob([JSON.stringify({ version: 1, labels: Object.values(docs) }, null, 2)], { type: "application/json" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
@@ -99,6 +116,10 @@ export default function Annotate() {
           <option value="occluded">refused: occluded</option>
           <option value="ambiguous">refused: ambiguous</option>
         </select>
+        <Button size="sm" variant={mode === "outline" ? "default" : "outline"} onClick={() => { setMode(mode === "outline" ? "points" : "outline"); setPoly([]); }}>
+          {mode === "outline" ? "Tooth outlines: on" : "Tooth outlines: off"}
+        </Button>
+        {mode === "outline" && <Button size="sm" variant="outline" onClick={closeTooth} disabled={poly.length < 3}>Close tooth ({doc?.teeth?.length ?? 0} done)</Button>}
         <Button size="sm" onClick={exportJson} disabled={!Object.keys(docs).length}>Export JSON</Button>
       </div>
       <div className="grid md:grid-cols-[1fr_220px] gap-3">
@@ -112,7 +133,7 @@ export default function Annotate() {
           ))}
         </div>
       </div>
-      <p className="text-xs text-white/50">Click a landmark name, then click the point on the photo. Labels are saved only in this page until exported.</p>
+      <p className="text-xs text-white/50">Click a landmark name, then click the point on the photo. In tooth-outline mode, click around one visible tooth edge, press Close tooth, repeat for each tooth (needed to build and test a real-photo tooth segmenter). Labels are saved only in this page until exported.</p>
     </div>
   );
 }

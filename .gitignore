@@ -16,3 +16,5 @@ vite.config.ts.*
 /private/
 *.landmarks.json
 landmarks-*.json
+tooth-masks-*.json
+*.teeth.json
