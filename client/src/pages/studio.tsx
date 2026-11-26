@@ -1037,7 +1037,7 @@ export default function Studio() {
     setEnamel(false);
     setEdits({});
     setSel(null);
-    setShowGuides(!!g.sam);
+    setShowGuides(!!g.sam && tierOf(g.quality, g.engine) !== "C"); // no lines on a frame the checks rejected
     setPreset("whiten");
     setPhotoVersion((v) => v + 1);
     setCaseId("");
