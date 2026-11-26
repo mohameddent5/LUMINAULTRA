@@ -18,6 +18,7 @@ import {
   Type,
   UserRound,
 } from "lucide-react";
+import { samTeeth, type SamTeeth } from "@/lib/samTeeth";
 import { segmentTeeth, renderTeeth, whitenInPlace, type TeethEngine, type ToothEdit, type ShapeOptions } from "@/lib/smileEngine";
 import { jpegToPdf } from "@/lib/pdf";
 import { evaluateCapture, type CaptureQuality } from "@/lib/captureQuality";
@@ -654,10 +655,11 @@ type Graded = {
   engine: TeethEngine | null;
   quality: CaptureQuality;
   teethPx: number;
+  sam?: SamTeeth | null;
 };
 
-function regrade(c: HTMLCanvasElement, analysis: Analysis, region: Region | null): Graded {
-  const engine = region ? segmentTeeth(region) : null;
+function regrade(c: HTMLCanvasElement, analysis: Analysis, region: Region | null, inst?: Int32Array): Graded {
+  const engine = region ? segmentTeeth(region, inst) : null;
   let pts: { x: number; y: number }[] | undefined;
   if (analysis.close && engine && region) {
     const x0 = Math.min(...engine.teeth.map((t) => t.bx)) + region.x0;
@@ -687,6 +689,46 @@ async function gradeFrame(c: HTMLCanvasElement): Promise<Graded> {
     region = buildSeeded(c, a.seed);
   } else region = buildRegion(c, a.polygon);
   return regrade(c, a, region);
+}
+
+/** One careful pass on the chosen frame: one mask per tooth (MobileSAM, zero-shot). Slow, so never run on live frames. */
+async function refineWithSam(g: Graded, onProgress?: (f: number) => void): Promise<Graded> {
+  try {
+    const c = g.c;
+    const k = Math.min(1, 1280 / Math.max(c.width, c.height));
+    let sc = c;
+    if (k < 1) {
+      sc = document.createElement("canvas");
+      sc.width = Math.round(c.width * k);
+      sc.height = Math.round(c.height * k);
+      sc.getContext("2d")!.drawImage(c, 0, 0, sc.width, sc.height);
+    }
+    let roi: { x: number; y: number; w: number; h: number } | null = null;
+    if (!g.analysis.close) {
+      const xs = g.analysis.polygon.map((p) => p.x * k);
+      const ys = g.analysis.polygon.map((p) => p.y * k);
+      const mw = Math.max(...xs) - Math.min(...xs);
+      const mh = Math.max(...ys) - Math.min(...ys);
+      roi = { x: Math.min(...xs) - mw * 0.1, y: Math.min(...ys) - mh * 0.3, w: mw * 1.2, h: mh * 1.6 };
+    }
+    const sam = await samTeeth(sc, roi, onProgress);
+    if (!sam) return { ...g, sam: null };
+    const region = buildRegion(c, g.analysis.polygon);
+    if (!region) return { ...g, sam: null };
+    const inst = new Int32Array(region.w * region.h);
+    for (let y = 0; y < region.h; y++) {
+      const sy = Math.min(sam.h - 1, Math.floor((y + region.y0) * k));
+      for (let x = 0; x < region.w; x++) {
+        const sx = Math.min(sam.w - 1, Math.floor((x + region.x0) * k));
+        inst[y * region.w + x] = sam.labels[sy * sam.w + sx];
+      }
+    }
+    const r = regrade(c, g.analysis, region, inst);
+    return r.engine ? { ...r, sam } : { ...g, sam: null };
+  } catch (e) {
+    console.warn("SAM unavailable:", e);
+    return { ...g, sam: null };
+  }
 }
 
 async function sha256(c: HTMLCanvasElement): Promise<string> {
@@ -982,7 +1024,11 @@ export default function Studio() {
       setBusy(true);
       setSaved(false);
       setMsg("");
-      apply(await gradeFrame(c));
+      let g = await gradeFrame(c);
+      setMsg("Reading each tooth...");
+      g = await refineWithSam(g, (f) => setMsg(`Reading each tooth... ${Math.round(f * 100)}%`));
+      setMsg("");
+      apply(g);
       setBusy(false);
       setStep(2);
     },
@@ -1033,7 +1079,10 @@ export default function Studio() {
     setBurstMsg("");
     setSaved(false);
     setMsg("");
-    apply(best);
+    setMsg("Reading each tooth...");
+    const bestSam = await refineWithSam(best, (f) => setMsg(`Reading each tooth... ${Math.round(f * 100)}%`));
+    setMsg("");
+    apply(bestSam);
     setBusy(false);
     setStep(2);
   };
@@ -1639,7 +1688,7 @@ export default function Studio() {
             ) : busy ? (
               <div className={`rounded-2xl p-10 text-center ${card}`} role="status">
                 <div className="mx-auto mb-4 w-12 h-12 rounded-full border-4 border-sky-200 border-t-transparent animate-spin" />
-                {t.reading}
+                {msg || t.reading}
               </div>
             ) : (
               <div className="grid sm:grid-cols-2 gap-4">

@@ -158,7 +158,7 @@ function hull(points: [number, number][]): [number, number][] {
   return lo.concat(up);
 }
 
-export function segmentTeeth(region: RegionLike): TeethEngine | null {
+export function segmentTeeth(region: RegionLike, instanceLabels?: Int32Array): TeethEngine | null {
   const { w, h, base, mask } = region;
   const d = base.data;
   const bin = new Uint8Array(w * h);
@@ -169,11 +169,18 @@ export function segmentTeeth(region: RegionLike): TeethEngine | null {
       total++;
     }
   }
+  if (instanceLabels) {
+    total = 0;
+    for (let i = 0; i < w * h; i++) {
+      bin[i] = instanceLabels[i] > 0 ? 1 : 0;
+      total += bin[i];
+    }
+  }
   if (total < 200) return null;
 
   // 0. tooth-likeness filter: drop lip, gum and skin pixels that leaked into the mask.
   // Enamel is bright and only mildly red-over-green; lips and gums are darker or much redder.
-  {
+  if (!instanceLabels) {
     const lum: number[] = [];
     const rg: number[] = [];
     for (let i = 0; i < w * h; i += 3) {
@@ -201,6 +208,17 @@ export function segmentTeeth(region: RegionLike): TeethEngine | null {
     for (let i = 0; i < w * h; i++) if (bin[i] && !opened[i]) { bin[i] = 0; total--; }
   }
 
+  let lab = new Int32Array(w * h);
+  let kept = 0;
+  let minCore = 12;
+  if (instanceLabels) {
+    // one instance mask per tooth (zero-shot MobileSAM): no colour filter, no erosion split.
+    for (let i = 0; i < w * h; i++) {
+      lab[i] = instanceLabels[i];
+      if (lab[i] > kept) kept = lab[i];
+    }
+    if (kept < 1) return null;
+  } else {
   // 1. separate touching teeth: erode, label the cores, grow them back inside the mask.
   const r = Math.max(2, Math.round(Math.max(w, h) / 120));
   const core = erode(bin, w, h, r);
@@ -232,12 +250,12 @@ export function segmentTeeth(region: RegionLike): TeethEngine | null {
     }
     sizes.push(n);
   }
-  const minCore = Math.max(12, total * 0.004);
+  minCore = Math.max(12, total * 0.004);
   const keep = new Int32Array(nl + 1);
-  let kept = 0;
+  kept = 0;
   for (let l = 1; l <= nl; l++) if (sizes[l] >= minCore) keep[l] = ++kept;
   if (kept < 1) return null;
-  const lab = new Int32Array(w * h);
+  lab = new Int32Array(w * h);
   let queue: number[] = [];
   for (let i = 0; i < w * h; i++) {
     if (label[i] && keep[label[i]]) {
@@ -262,6 +280,8 @@ export function segmentTeeth(region: RegionLike): TeethEngine | null {
       }
     }
     queue = next;
+  }
+
   }
 
   // 2. gap tone: nearest non-tooth colour, darkened.
