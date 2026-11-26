@@ -1,3 +1,4 @@
+import { patientsApi, plansApi } from "@/lib/store";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ export default function TreatmentPlanner() {
   });
 
   useEffect(() => {
-    const archive = JSON.parse(localStorage.getItem("patientArchive") || "[]");
+    patientsApi.list().then((archive) => {
     setPatients(archive);
     if (archive.length > 0) {
       setSelectedPatient(archive[0]);
@@ -31,6 +32,7 @@ export default function TreatmentPlanner() {
         vdoRatio: archive[0].measurements?.vdoRatio || 45,
       });
     }
+    }).catch(() => {});
   }, []);
 
   const calculateHarmony = () => {
@@ -47,15 +49,13 @@ export default function TreatmentPlanner() {
 
   const harmony = calculateHarmony();
 
-  const savePlan = () => {
-    const plans = JSON.parse(localStorage.getItem("treatmentPlans") || "[]");
-    plans.push({
-      id: Date.now(),
-      date: new Date().toLocaleDateString(),
-      measurements,
-      harmony: harmony.toFixed(0),
-    });
-    localStorage.setItem("treatmentPlans", JSON.stringify(plans));
+  const savePlan = async () => {
+    try {
+      await plansApi.create(measurements as any, Math.round(harmony), selectedPatient?.id);
+    } catch {
+      toast({ title: "Error", description: "Plan was not saved", variant: "destructive" });
+      return;
+    }
     toast({
       title: "Treatment Plan Saved",
       description: `Harmony Score: ${harmony.toFixed(0)}/100`,
@@ -87,7 +87,7 @@ export default function TreatmentPlanner() {
               <select
                 value={selectedPatient?.id || ""}
                 onChange={(e) => {
-                  const patient = patients.find((p) => p.id === parseInt(e.target.value));
+                  const patient = patients.find((p) => p.id === e.target.value);
                   if (patient) {
                     setSelectedPatient(patient);
                     setMeasurements({

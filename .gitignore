@@ -5,3 +5,9 @@ server/public
 vite.config.ts.*
 *.tar.gz
 .vercel
+
+# secrets and local tooling state
+.env
+.env.*
+!.env.example
+.local/

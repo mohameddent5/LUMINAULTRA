@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { patientsApi, snapshotsApi } from "@/lib/store";
+import { LandmarkSmoother, MeasurementStabilizer, faceQuality } from "@/lib/smoothing";
 
 interface DSDMeasurements {
   facialMidlineDeviation: number;
@@ -40,6 +42,47 @@ interface AnalysisResult {
   clinicalRecommendations: string[];
   classificationNotes: string;
   measurementConfidence: Record<string, number>;
+  /** true once readings have settled (enough frames, low spread). */
+  isStable?: boolean;
+  /** set when the face is not in a measurable pose. */
+  qualityMessage?: string;
+}
+
+
+const CONFIDENCE_LABELS: Record<string, keyof DSDMeasurements> = {
+  "W/L": "centralIncisorsWLRatio", "GR-L": "goldenRatioLateral", "Sym": "gingivalSymmetry",
+  "Cant": "occlusalPlaneCant", "VDO": "verticalDimensionRatio", "Conv": "smileConvexityScore",
+  "RestTooth": "toothVisibilityAtRest", "IcW": "intercanineWidth",
+};
+
+/** Replace per-frame values with rolling medians and compute real (spread-based) confidence. */
+function stabilizeAnalysis(
+  a: AnalysisResult, st: MeasurementStabilizer, quality: { ok: boolean; reason?: string },
+): AnalysisResult {
+  if (!quality.ok) return { ...a, isStable: false, qualityMessage: quality.reason, measurementConfidence: {} };
+  const m: any = { ...a.measurements };
+  for (const [k, v] of Object.entries(m)) {
+    if (typeof v === "number") st.push(k, v);
+    else if (Array.isArray(v)) v.forEach((x, i) => typeof x === "number" && st.push(`${k}[${i}]`, x));
+  }
+  st.push("overallHarmony", a.overallHarmony);
+  for (const [k, v] of Object.entries(m)) {
+    if (typeof v === "number") m[k] = st.value(k) ?? v;
+    else if (Array.isArray(v)) m[k] = v.map((x, i) => (typeof x === "number" ? st.value(`${k}[${i}]`) ?? x : x));
+  }
+  const tol = (k: string) => Math.max(1, Math.abs(st.value(k) ?? 0) * 0.1);
+  const confidence: Record<string, number> = {};
+  for (const [label, key] of Object.entries(CONFIDENCE_LABELS)) confidence[label] = st.stability(key, tol(key));
+  const values = Object.values(confidence);
+  confidence["Pathway"] = values.length ? Math.round(values.reduce((x, y) => x + y, 0) / values.length) : 0;
+  const isStable = st.count("overallHarmony") >= 10 && values.every((c) => c >= 60);
+  return {
+    ...a,
+    measurements: m,
+    overallHarmony: st.value("overallHarmony") ?? a.overallHarmony,
+    measurementConfidence: confidence,
+    isStable,
+  };
 }
 
 export function ARCanvas() {
@@ -61,6 +104,10 @@ export function ARCanvas() {
   const [displayedHarmony, setDisplayedHarmony] = useState(0);
   const faceLandmarkerRef = useRef<any>(null);
   const requestRef = useRef<number | null>(null);
+  const smootherRef = useRef(new LandmarkSmoother());
+  const stabilizerRef = useRef(new MeasurementStabilizer(15));
+  const lastUiUpdateRef = useRef(0);
+  const lastFaceSeenRef = useRef(0);
 
   useEffect(() => {
     const initMediaPipe = async () => {
@@ -464,9 +511,20 @@ export function ARCanvas() {
     }
 
     if (results.faceLandmarks) {
-      for (const landmarks of results.faceLandmarks) {
-        const analysisResult = calculateDSDMeasurements(landmarks, canvas.width, canvas.height);
-        setAnalysis(analysisResult);
+      for (const rawLandmarks of results.faceLandmarks) {
+        const now = performance.now();
+        if (now - lastFaceSeenRef.current > 500) stabilizerRef.current.reset();
+        lastFaceSeenRef.current = now;
+        const quality = faceQuality(rawLandmarks);
+        const landmarks = smootherRef.current.smooth(rawLandmarks, now);
+        const analysisResult = stabilizeAnalysis(
+          calculateDSDMeasurements(landmarks, canvas.width, canvas.height), stabilizerRef.current, quality,
+        );
+        // Update React state ~8x/second instead of every frame.
+        if (now - lastUiUpdateRef.current > 120) {
+          lastUiUpdateRef.current = now;
+          setAnalysis(analysisResult);
+        }
 
         if (showFacialGuides) {
           drawFacialGuides(overlayCtx, landmarks, canvas.width, canvas.height);
@@ -814,6 +872,14 @@ End of Report | Lumina Ultra™ v1.0
     const canvas = canvasRef.current;
     const overlayCanvas = overlayCanvasRef.current;
     if (!canvas || !overlayCanvas) return;
+    if (analysis?.qualityMessage) {
+      toast({ title: "Can't capture yet", description: analysis.qualityMessage });
+      return;
+    }
+    if (analysis && !analysis.isStable) {
+      toast({ title: "Readings still settling", description: "Hold still for a moment, then capture." });
+      return;
+    }
 
     // Create composite canvas with video frame + overlays
     const composite = document.createElement("canvas");
@@ -827,18 +893,28 @@ End of Report | Lumina Ultra™ v1.0
     // Draw overlays on top
     compositeCtx.drawImage(overlayCanvas, 0, 0);
 
-    // Save to localStorage for smile simulator
-    const imageData = composite.toDataURL("image/jpeg");
-    const snapshots = JSON.parse(localStorage.getItem("capturedSnapshots") || "[]");
-    const snapshot = {
-      id: Date.now(),
-      date: new Date().toLocaleDateString(),
-      time: new Date().toLocaleTimeString(),
-      image: imageData,
-      analysis: analysis,
-    };
-    snapshots.push(snapshot);
-    localStorage.setItem("capturedSnapshots", JSON.stringify(snapshots));
+    const imageData = composite.toDataURL("image/jpeg", 0.85);
+    const patientName = (window.prompt("Patient name or ID for this capture:", "") || "").trim();
+    if (!patientName) {
+      toast({ title: "Capture cancelled", description: "A patient name or ID is required." });
+      return;
+    }
+    (async () => {
+      try {
+        const m = analysis?.measurements as any;
+        const numeric: Record<string, number> = {};
+        for (const [k, v] of Object.entries(m ?? {})) if (typeof v === "number" && Number.isFinite(v)) numeric[k] = v;
+        const patient = await patientsApi.create({
+          patientName,
+          harmony: analysis?.overallHarmony ?? 0,
+          measurements: numeric,
+          notes: analysis?.classificationNotes ?? "",
+        });
+        await snapshotsApi.create(imageData, analysis, patient.id);
+      } catch {
+        toast({ title: "Not saved", description: "Could not save to the server. Check your connection and sign-in.", variant: "destructive" });
+      }
+    })();
 
     // Also download
     const link = document.createElement("a");
@@ -947,6 +1023,11 @@ End of Report | Lumina Ultra™ v1.0
           ))}
         </div>
 
+        {analysis && (analysis.qualityMessage || !analysis.isStable) && (
+          <div className="rounded-lg p-2 text-xs bg-amber-500/10 border border-amber-500/30 text-amber-200">
+            {analysis.qualityMessage ?? "Hold still, readings are settling..."}
+          </div>
+        )}
         {analysis && (
           <div className="bg-black/40 rounded-lg p-3 space-y-2 text-xs">
             <div className="grid grid-cols-3 gap-2 text-muted-foreground text-xs animate-in fade-in-50">

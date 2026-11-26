@@ -5,9 +5,10 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Home, Trash2, Download, Upload } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { patientsApi, snapshotsApi } from "@/lib/store";
 
 interface CapturedSnapshot {
-  id: number;
+  id: string;
   date: string;
   time: string;
   image: string;
@@ -36,22 +37,24 @@ export default function SmileSimulator() {
   });
 
   useEffect(() => {
-    const archive = JSON.parse(localStorage.getItem("patientArchive") || "[]");
-    const saved = JSON.parse(localStorage.getItem("capturedSnapshots") || "[]");
-    setPatients(archive);
-    setSnapshots(saved);
-    if (saved.length > 0) {
-      setSelectedSnapshot(saved[saved.length - 1]);
-      if (saved[saved.length - 1].analysis) {
-        setCurrentState({
-          wlRatio: saved[saved.length - 1].analysis.measurements.centralIncisorsWLRatio,
-          goldenRatio: saved[saved.length - 1].analysis.measurements.goldenRatioLateral,
-          gingivalSym: saved[saved.length - 1].analysis.measurements.gingivalSymmetry,
-          convexity: saved[saved.length - 1].analysis.measurements.smileConvexityScore,
-          vdo: saved[saved.length - 1].analysis.measurements.verticalDimensionRatio,
-        });
+    Promise.all([patientsApi.list(), snapshotsApi.list()]).then(([archive, saved]) => {
+      setPatients(archive);
+      setSnapshots(saved);
+      if (saved.length > 0) {
+        const latest = saved[0]; // newest first
+        setSelectedSnapshot(latest);
+        const m = latest.analysis?.measurements;
+        if (m) {
+          setCurrentState({
+            wlRatio: m.centralIncisorsWLRatio,
+            goldenRatio: m.goldenRatioLateral,
+            gingivalSym: m.gingivalSymmetry,
+            convexity: m.smileConvexityScore,
+            vdo: m.verticalDimensionRatio,
+          });
+        }
       }
-    }
+    }).catch(() => toast({ title: "Error", description: "Could not load snapshots", variant: "destructive" }));
   }, []);
 
   const calculateHarmony = (state: typeof currentState) => {
@@ -69,12 +72,17 @@ export default function SmileSimulator() {
   const currentHarmony = calculateHarmony(currentState);
   const improvements = calculateHarmony(idealState);
 
-  const deleteSnapshot = (id: number) => {
+  const deleteSnapshot = async (id: string) => {
+    try {
+      await snapshotsApi.remove(id);
+    } catch {
+      toast({ title: "Error", description: "Could not delete", variant: "destructive" });
+      return;
+    }
     const updated = snapshots.filter((s) => s.id !== id);
     setSnapshots(updated);
-    localStorage.setItem("capturedSnapshots", JSON.stringify(updated));
     if (selectedSnapshot?.id === id) {
-      setSelectedSnapshot(updated.length > 0 ? updated[updated.length - 1] : null);
+      setSelectedSnapshot(updated.length > 0 ? updated[0] : null);
     }
     toast({ title: "Deleted", description: "Snapshot removed" });
   };

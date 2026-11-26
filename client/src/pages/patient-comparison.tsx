@@ -1,3 +1,4 @@
+import { patientsApi } from "@/lib/store";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -5,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Home } from "lucide-react";
 
 interface PatientAnalysis {
-  id: number;
+  id: string;
   date: string;
   patientName: string;
   harmony: number;
@@ -19,8 +20,7 @@ export default function PatientComparison() {
   const [selected, setSelected] = useState<[PatientAnalysis | null, PatientAnalysis | null]>([null, null]);
 
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem("patientArchive") || "[]");
-    setPatients(saved);
+    patientsApi.list().then(setPatients).catch(() => {});
   }, []);
 
   const selectPatient = (patient: PatientAnalysis, index: 0 | 1) => {
