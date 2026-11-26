@@ -1,3 +1,4 @@
+import { PeakTracker, measureFrame } from "@/lib/peakGum";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import {
@@ -1129,6 +1130,49 @@ export default function Studio() {
   const burstRef = useRef<() => Promise<void>>(async () => {});
   burstRef.current = burst;
 
+  /** Watch the smile for up to 8 s, keep the natural frame with the most gum showing, then run the design on it. */
+  const trackPeak = async () => {
+    const v = videoRef.current;
+    if (!v || !v.videoWidth) return;
+    setBurstMsg("Smile naturally, hold it...");
+    const tr = new PeakTracker<HTMLCanvasElement>();
+    let prev: Uint8Array | null = null;
+    const t0 = Date.now();
+    try {
+      const lm = await getLandmarker();
+      while (Date.now() - t0 < 8000 && !tr.done) {
+        const small = toCanvas(v, v.videoWidth, v.videoHeight, 640);
+        const f = lm.detect(small)?.faceLandmarks?.[0];
+        if (f && f.length > 400) {
+          const r = measureFrame(small, f, prev);
+          prev = r.small;
+          tr.add(r.m, () => toCanvas(v, v.videoWidth, v.videoHeight, 1280));
+        }
+        await new Promise((r) => setTimeout(r, 60));
+      }
+    } catch (e) {
+      console.warn("peak tracker unavailable, using burst", e);
+    }
+    const pick = tr.pick;
+    if (!pick) return burstRef.current();
+    stopCamera();
+    setBusy(true);
+    setBurstMsg("");
+    sourceRef.current = "camera-burst";
+    setSaved(false);
+    setMsg("Reading each tooth...");
+    const g = await gradeFrame(pick.frame);
+    const withSam = await refineWithSam(g, (x) => setMsg(`Reading each tooth... ${Math.round(x * 100)}%`));
+    const rg = tr.range;
+    setMsg("");
+    apply(withSam);
+    console.info("[peak] gum ratio of picked frame (median of 5)", pick.ratio.toFixed(2), "range seen", rg?.map((x) => x.toFixed(2)).join("-"), "natural frames", tr.natural);
+    setBusy(false);
+    setStep(2);
+  };
+  const trackRef = useRef<() => Promise<void>>(async () => {});
+  trackRef.current = trackPeak;
+
   /* live capture gate */
   useEffect(() => {
     if (!cameraOn) {
@@ -1150,7 +1194,7 @@ export default function Studio() {
         const resOk = Math.min(v.videoWidth, v.videoHeight) >= 480;
         // the fast colour pass miscounts single teeth on live frames; trust the share of tooth-coloured pixels in the mouth instead
         const teethSeen = !!g.region && g.region.toothShare >= (g.analysis.close ? 0.02 : 0.12);
-        const bad = g.quality.signals.find((x) => !x.ok && !(x.id === "resolution" && resOk) && !(x.id === "mouthVisibility" && teethSeen && x.value >= 0.08));
+        const bad = g.quality.signals.find((x) => !x.ok && !(x.id === "resolution" && resOk) && !(x.id === "sharpness" && Number(x.value) >= 15) && !(x.id === "mouthVisibility" && teethSeen && x.value >= 0.08));
         const text = !bad
           ? t.live_ready
           : bad.id === "sharpness"
@@ -1162,7 +1206,7 @@ export default function Studio() {
                 : g.engine && g.engine.teeth.length > 0
                   ? t.live_closer
                   : t.live_teeth;
-        console.info("[live]", g.quality.signals.map((x) => `${x.id}:${x.ok ? "ok" : "NO"}(${Number(x.value).toFixed(2)})`).join(" "), `teeth=${g.engine?.teeth.length ?? 0} share=${g.region?.toothShare.toFixed(3)}`);
+        if (localStorage.getItem("dbgLive")) console.info("[live]", g.quality.signals.map((x) => `${x.id}:${x.ok ? "ok" : "NO"}(${Number(x.value).toFixed(2)})`).join(" "), `teeth=${g.engine?.teeth.length ?? 0} share=${g.region?.toothShare.toFixed(3)}`);
         // steadiness: mean brightness change on a tiny copy of two frames in a row
         const sm = document.createElement("canvas");
         sm.width = 48;
@@ -1185,7 +1229,7 @@ export default function Studio() {
         if (steady >= 3) {
           steady = 0;
           stop = true;
-          void burstRef.current();
+          void trackRef.current();
         }
       } catch {
         /* keep last status */

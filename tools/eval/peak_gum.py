@@ -45,8 +45,8 @@ for f in sorted(glob.glob(d + "/f*.jpg")):
     fw = abs(eye_l[0] - eye_r[0]) or 1.0
     yaw = float((P(1)[0] - (eye_r[0] + eye_l[0]) / 2) / fw)
     cx = (top[0] + bot[0]) / 2
-    x0, x1 = int(cx - 0.12 * mw), int(cx + 0.12 * mw)
-    y0, y1 = int(top[1]), int(bot[1])
+    x0, x1 = max(0, int(cx - 0.12 * mw)), min(w, int(cx + 0.12 * mw))
+    y0, y1 = max(0, int(top[1])), min(h, int(bot[1]))
     if y1 - y0 < 6 or x1 - x0 < 6:
         rows.append(dict(f=f, ok=False, move=mv))
         continue
