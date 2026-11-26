@@ -35,6 +35,15 @@ for f in sorted(glob.glob(d + "/f*.jpg")):
     P = lambda i: (L[i].x * w, L[i].y * h)
     top, bot, cl, cr = P(13), P(14), P(61), P(291)
     mw = float(np.hypot(cr[0] - cl[0], cr[1] - cl[1]))
+    # eyes open (eye aspect ratio), roll and yaw from the face landmarks
+    def ear(a, b, c, e):
+        return abs(P(a)[1] - P(b)[1]) / max(1e-6, abs(P(c)[0] - P(e)[0]))
+    ear_r = ear(159, 145, 33, 133)
+    ear_l = ear(386, 374, 362, 263)
+    eye_r, eye_l = P(33), P(263)
+    roll = float(np.degrees(np.arctan2(eye_l[1] - eye_r[1], eye_l[0] - eye_r[0])))
+    fw = abs(eye_l[0] - eye_r[0]) or 1.0
+    yaw = float((P(1)[0] - (eye_r[0] + eye_l[0]) / 2) / fw)
     cx = (top[0] + bot[0]) / 2
     x0, x1 = int(cx - 0.12 * mw), int(cx + 0.12 * mw)
     y0, y1 = int(top[1]), int(bot[1])
@@ -60,7 +69,7 @@ for f in sorted(glob.glob(d + "/f*.jpg")):
             break
     th = int(last - first + 1)
     gh = int(gr[:first].sum())
-    rows.append(dict(f=f, ok=True, move=mv, ratio=gh / max(th, 1), gum=gh, tooth=th, open=(y1 - y0) / mw, mw=mw / w))
+    rows.append(dict(f=f, ok=True, ear=min(ear_r, ear_l), roll=roll, yaw=yaw, move=mv, ratio=gh / max(th, 1), gum=gh, tooth=th, open=(y1 - y0) / mw, mw=mw / w))
 
 ok = [i for i, r in enumerate(rows) if r["ok"]]
 ratio = np.full(len(rows), np.nan)
@@ -70,11 +79,14 @@ sm = ratio.copy()
 for i in range(len(rows)):  # 5-frame median of valid values
     win = [ratio[j] for j in range(max(0, i - 2), min(len(rows), i + 3)) if not np.isnan(ratio[j])]
     sm[i] = np.median(win) if len(win) >= 3 else np.nan
-steady = [i for i, r in enumerate(rows) if r["ok"] and r["move"] < 6.0 and not np.isnan(sm[i])]
-print("frames", len(rows), "face+teeth", len(ok), "steady", len(steady))
-print("smoothed ratio by frame:", " ".join("%d:%s" % (i, "-" if np.isnan(v) else "%.2f" % v) for i, v in enumerate(sm)))
+def natural(r):
+    return r["ok"] and r["move"] < 6.0 and r["ear"] > 0.12 and abs(r["roll"]) < 8 and abs(r["yaw"]) < 0.12
+steady = [i for i, r in enumerate(rows) if natural(r) and not np.isnan(sm[i])]
+print("frames", len(rows), "face+teeth", len(ok), "natural(steady, eyes open, frontal)", len(steady))
 if steady:
     best = max(steady, key=lambda i: sm[i])
-    print("PEAK frame", best, os.path.basename(rows[best]["f"]), "smoothed ratio %.2f raw %.2f move %.1f" % (sm[best], rows[best]["ratio"], rows[best]["move"]))
-    print("median smoothed ratio %.2f, range %.2f-%.2f" % (np.nanmedian(sm), np.nanmin(sm), np.nanmax(sm)))
-    cv2.imwrite(f"/downloads/peak_{out}.private.jpg", cv2.imread(rows[best]["f"]))
+    r = rows[best]
+    print("PEAK frame", best, "smoothed ratio %.2f raw %.2f ear %.2f roll %.1f yaw %.2f move %.1f" % (sm[best], r["ratio"], r["ear"], r["roll"], r["yaw"], r["move"]))
+    allv = [sm[i] for i in steady]
+    print("natural-frame ratio range %.2f-%.2f, median %.2f" % (min(allv), max(allv), float(np.median(allv))))
+    cv2.imwrite(f"/downloads/peak_{out}.private.jpg", cv2.imread(r["f"]))
