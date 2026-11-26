@@ -84,7 +84,7 @@ const T = {
     natural_depthHint: "Translucent edges, warmer necks",
     guides: "Show guides",
     guidesHint: "Midline and edge curve",
-    guideLegend: "Cyan dashed: dental midline. White: smooth edge curve. Yellow: current edge line.",
+    guideLegend: "Cyan dashed: dental midline. White: smooth edge curve. Yellow: current edge line. Pink dots: gum line.",
     tapTeeth: "Tap a tooth to adjust it.",
     editTitle: "Adjust this tooth",
     longer: "Longer",
@@ -211,7 +211,7 @@ const T = {
     natural_depthHint: "Translucent edges, warmer necks",
     guides: "Show guides",
     guidesHint: "Midline and edge curve",
-    guideLegend: "Cyan dashed: dental midline. White: smooth edge curve. Yellow: current edge line.",
+    guideLegend: "Cyan dashed: dental midline. White: smooth edge curve. Yellow: current edge line. Pink dots: gum line.",
     tapTeeth: "Tap a tooth to adjust it.",
     editTitle: "Adjust this tooth",
     longer: "Longer",
@@ -741,6 +741,21 @@ function drawGuides(
       }
       g.stroke();
       g.setLineDash([]);
+      // gum line: where each upper tooth meets the gum, joined by a pink line with a dot at each tooth
+      g.strokeStyle = "#f472b6";
+      g.fillStyle = "#f472b6";
+      g.lineWidth = lw;
+      g.beginPath();
+      up.forEach((t, i) => {
+        const x = t.cx + region.x0, y = t.by + region.y0;
+        i ? g.lineTo(x, y) : g.moveTo(x, y);
+      });
+      g.stroke();
+      for (const t of up) {
+        g.beginPath();
+        g.arc(t.cx + region.x0, t.by + region.y0, lw * 2.2, 0, Math.PI * 2);
+        g.fill();
+      }
     }
     // dental midline between the two most central teeth
     const all = [...engine.teeth].sort((a, b) => a.cx - b.cx);

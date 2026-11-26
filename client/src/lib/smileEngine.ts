@@ -171,6 +171,36 @@ export function segmentTeeth(region: RegionLike): TeethEngine | null {
   }
   if (total < 200) return null;
 
+  // 0. tooth-likeness filter: drop lip, gum and skin pixels that leaked into the mask.
+  // Enamel is bright and only mildly red-over-green; lips and gums are darker or much redder.
+  {
+    const lum: number[] = [];
+    const rg: number[] = [];
+    for (let i = 0; i < w * h; i += 3) {
+      if (!bin[i]) continue;
+      lum.push(0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]);
+      rg.push(d[i * 4] - d[i * 4 + 1]);
+    }
+    const mL = median(lum);
+    const mRG = median(rg);
+    let dropped = 0;
+    for (let i = 0; i < w * h; i++) {
+      if (!bin[i]) continue;
+      const l = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+      const c = d[i * 4] - d[i * 4 + 1];
+      if (l < mL * 0.62 || c > mRG + 32) {
+        bin[i] = 0;
+        dropped++;
+      }
+    }
+    total -= dropped;
+    // a mask that needed heavy cleaning is not trustworthy
+    if (total < 200 || dropped > 0.45 * (total + dropped)) return null;
+    // remove speckle left behind
+    const opened = erode(bin, w, h, 1);
+    for (let i = 0; i < w * h; i++) if (bin[i] && !opened[i]) { bin[i] = 0; total--; }
+  }
+
   // 1. separate touching teeth: erode, label the cores, grow them back inside the mask.
   const r = Math.max(2, Math.round(Math.max(w, h) / 120));
   const core = erode(bin, w, h, r);
