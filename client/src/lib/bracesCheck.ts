@@ -45,7 +45,7 @@ export function box_blue(e: TeethEngine, t: TeethEngine["teeth"][number]): numbe
 export function bracesSuspected(e: TeethEngine | null): boolean {
   if (!e || e.teeth.length < 3) return false;
   const shares = e.teeth.map(tooth_hardware);
-  const hit = shares.filter((s) => s >= 0.08).length;
+  const hit = shares.filter((s) => s >= 0.12).length;
   const blue = e.teeth.map((t) => box_blue(e, t)).filter((x) => x >= 0.07).length;
   return (hit >= 3 && hit / shares.length >= 0.4) || (blue >= 3 && blue / shares.length >= 0.4);
 }

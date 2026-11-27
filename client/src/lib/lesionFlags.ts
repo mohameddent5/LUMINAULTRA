@@ -20,8 +20,14 @@ export function lesionFlags(e: TeethEngine | null): ToothFlag[] {
     const ref = s[Math.floor(s.length * 0.75)];
     let n = 0;
     let dark = 0;
+    // Interior only: pixels near the mask border are gum, lip shadow or mask leakage, not tooth body.
+    // Margin 12% of tooth width (NEITHER-sourced; set after clean healthy photos ex26/ex27 false-flagged).
+    const W = t.bw, H = t.bh, r = Math.max(2, Math.round(0.12 * W));
+    const inside = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < H && d[(y * W + x) * 4 + 3] > 0;
     for (let i = 0; i < d.length; i += 4) {
       if (d[i + 3] === 0) continue;
+      const px = (i / 4) % W, py = Math.floor(i / 4 / W);
+      if (!(inside(px - r, py) && inside(px + r, py) && inside(px, py - r) && inside(px, py + r))) continue;
       const R = d[i], G = d[i + 1], B = d[i + 2];
       const l = 0.299 * R + 0.587 * G + 0.114 * B;
       const mx = Math.max(R, G, B), mn = Math.min(R, G, B);
