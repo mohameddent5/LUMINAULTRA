@@ -1,4 +1,5 @@
 import { lesionFlags } from "@/lib/lesionFlags";
+import { spacingNotes } from "@/lib/spacingGeometry";
 import { bracesSuspected } from "@/lib/bracesCheck";
 import { INTENDED_USE } from "@/lib/intendedUse";
 import { PeakTracker, measureFrame } from "@/lib/peakGum";
@@ -2144,6 +2145,12 @@ export default function Studio() {
                       </span>
                     </p>
                     <p className={`text-base ${muted}`}>{tier === "A" ? t.tierA : tier === "B" ? t.tierB : t.tierC}</p>
+                    {!bracesSuspected(engine) && quality.acceptable && spacingNotes(engine).length > 0 && (
+                      <p className={`text-base ${muted}`} data-testid="flag-spacing">
+                        {spacingNotes(engine).some((n) => n.kind === "missing") ? "Possible missing tooth or a wide gap between two teeth. " : "Possible spacing between two teeth. "}
+                        Geometry only, not validated. Verify clinically.
+                      </p>
+                    )}
                     {!bracesSuspected(engine) && quality.acceptable && lesionFlags(engine).length > 0 && (
                       <p className={`text-base ${muted}`} data-testid="flag-caries">
                         Possible caries on {lesionFlags(engine).length} {lesionFlags(engine).length > 1 ? "teeth" : "tooth"} (dark or brown patches). Not a diagnosis. Verify clinically. Colour only: stain, calculus or a dark filling look the same.
