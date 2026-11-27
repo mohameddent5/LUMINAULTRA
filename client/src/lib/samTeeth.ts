@@ -409,6 +409,9 @@ function autoToothRoi(canvas: HTMLCanvasElement): SamBox | null {
  * (2) with no face ROI, retry inside an automatic tooth-colour ROI, at those scales too.
  */
 export async function samTeethRobust(canvas: HTMLCanvasElement, roi?: SamBox | null, onProgress?: (f: number) => void): Promise<SamTeeth | null> {
+  const tStart = performance.now();
+  // Total budget: a retry starts only while under 40 s, so a slow device or a heavy frame ends in an honest refusal, not a multi-minute wait. NEITHER-sourced.
+  const underBudget = () => performance.now() - tStart < 40000;
   const first = await samTeeth(canvas, roi, onProgress);
   if (first) return first;
   const scaled = (f: number) => {
@@ -418,10 +421,11 @@ export async function samTeethRobust(canvas: HTMLCanvasElement, roi?: SamBox | n
     return c2;
   };
   for (const f of [0.8, 1.25]) {
+    if (!underBudget()) break;
     const r = await samTeeth(scaled(f), roi ? { x: roi.x * f, y: roi.y * f, w: roi.w * f, h: roi.h * f } : null);
     if (r && r.count >= MIN_FALLBACK_TEETH) return { ...r, scale: f };
   }
-  if (!roi) {
+  if (!roi && underBudget()) {
     const a = autoToothRoi(canvas);
     if (a) {
       for (const f of [1]) { // one attempt only: each finder run costs 10 to 15 s, so fallbacks are capped at 3 extra runs
