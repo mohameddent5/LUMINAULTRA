@@ -761,9 +761,13 @@ async function refineWithSam(g: Graded, onProgress?: (f: number) => void): Promi
     return r.engine ? { ...r, sam, lower } : { ...g, sam: null };
   } catch (e) {
     console.warn("SAM unavailable:", e);
+    samEngineFailed = true;
     return { ...g, sam: null };
   }
 }
+
+/** set when the tooth-reading engine threw (model load, wasm, memory): the photo is not at fault, so the notice must not tell the user to retake it */
+let samEngineFailed = false;
 
 async function sha256(c: HTMLCanvasElement): Promise<string> {
   const blob: Blob | null = await new Promise((r) => c.toBlob(r, "image/png"));
@@ -1115,6 +1119,7 @@ export default function Studio() {
   const [split, setSplit] = useState(50);
   const [saved, setSaved] = useState(false);
   const [msg, setMsg] = useState("");
+  const [engineDown, setEngineDown] = useState(false);
   const [hasPhoto, setHasPhoto] = useState(false);
   const [engine, setEngine] = useState<TeethEngine | null>(null);
   const [lowerBoxes, setLowerBoxes] = useState<{ x0: number; x1: number; y0: number; y1: number }[]>([]);
@@ -1219,6 +1224,7 @@ export default function Studio() {
         let g = await withTimeout(gradeFrame(c), GRADE_LIMIT_MS);
         setMsg("Reading each tooth...");
         let note = "";
+        samEngineFailed = false;
         let live = true; // late progress from a run that timed out must not overwrite the notice
         try {
           g = await withTimeout(refineWithSam(g, (f) => { if (live) setMsg(`Reading each tooth... ${Math.round(f * 100)}%`); }), SAM_LIMIT_MS);
@@ -1228,6 +1234,8 @@ export default function Studio() {
           g = { ...g, sam: null };
           note = "The detailed tooth reading took too long, so only a quick estimate is shown and no design is drawn. Retake the photo closer and in better light, or try again.";
         }
+        setEngineDown(samEngineFailed);
+        if (samEngineFailed) note = "The tooth-reading engine could not start (check the connection and try again). This is not a problem with your photo, and no design is drawn.";
         apply(g);
         setMsg(note);
         setStep(2);
@@ -2106,6 +2114,9 @@ export default function Studio() {
               </div>
             </div>
             <p className={`text-base ${muted}`}>{t.drag}</p>
+            {engineDown && (
+              <p role="alert" data-testid="engine-down" className="text-base text-amber-200">The tooth-reading engine could not start (check the connection and try again). This is not a problem with your photo, so there is no need to retake it.</p>
+            )}
             {designNote && (
               <p role="status" className={`text-base ${designNote.ok ? "text-fuchsia-200" : "text-amber-200"}`}>
                 {designNote.ok ? `${PROPOSAL_LABEL} ${designNote.text}` : `No design drawn: ${designNote.text}`}
