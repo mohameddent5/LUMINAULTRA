@@ -1,4 +1,5 @@
 import { lesionFlags } from "@/lib/lesionFlags";
+import { bracesSuspected } from "@/lib/bracesCheck";
 import { INTENDED_USE } from "@/lib/intendedUse";
 import { PeakTracker, measureFrame } from "@/lib/peakGum";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1021,6 +1022,7 @@ function drawGuides(
 }
 
 function tierOf(q: CaptureQuality | null, e: TeethEngine | null, closeUp = false): "A" | "B" | "C" {
+  if (bracesSuspected(e)) return "C";
   if (!q || !q.acceptable) return "C";
   // visible decay or fracture-like dark patches: the shape tools assume sound crowns, so refuse them
   const fl = lesionFlags(e);
@@ -2053,12 +2055,14 @@ export default function Studio() {
                       </span>
                     </p>
                     <p className={`text-base ${muted}`}>{tier === "A" ? t.tierA : tier === "B" ? t.tierB : t.tierC}</p>
-                    {lesionFlags(engine).length > 0 && (
+                    {!bracesSuspected(engine) && lesionFlags(engine).length > 0 && (
                       <p className={`text-base ${muted}`} data-testid="flag-caries">
                         Possible caries on {lesionFlags(engine).length} {lesionFlags(engine).length > 1 ? "teeth" : "tooth"} (dark or brown patches). Not a diagnosis. Verify clinically. Colour only: stain, calculus or a dark filling look the same.
                       </p>
                     )}
-                    {quality.acceptable && tier === "C" ? (
+                    {bracesSuspected(engine) ? (
+                      <p className={`text-base ${muted}`} data-testid="flag-braces">Braces or brackets look present on the teeth. The shape tools and the colour flags assume plain enamel, so no design is drawn and no decay flags are shown. This is a refusal, not a finding.</p>
+                    ) : quality.acceptable && tier === "C" ? (
                       <p className={`text-base ${muted}`}>The photo itself is fine, but dark patches suggest decay or damage. Design lines are hidden because the shape tools assume sound teeth.</p>
                     ) : quality.acceptable ? (
                       <p className={`text-base ${muted}`}>{t.relGoodWhy}</p>
