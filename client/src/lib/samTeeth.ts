@@ -215,7 +215,7 @@ export async function samTeeth(
       teeth = up;
     }
   }
-  if (teeth.length < 3) return null;
+  if (teeth.length < 1) return null;
   // a failed wide mask often holds one real tooth plus gum or a neighbour: keep only its bright, non-claimed pixels and take the biggest solid blob
   const refineResidual = (k0: Cand, taken: Cand[]): Cand | null => {
     const thr = 0.88 * k0.lum;
@@ -311,6 +311,9 @@ export async function samTeeth(
       }
     }
   }
+
+  // the finder needs 3 teeth in the row, but only after the re-ask and the outward probe had a chance to find the rest (a decayed tooth often fails the first pass)
+  if (teeth.length < 3) return null;
 
   // masks often leak a little into the dark gap beside the tooth (a diastema, a shadow): trim edge columns that are clearly darker than the tooth
   for (const t of teeth) {
