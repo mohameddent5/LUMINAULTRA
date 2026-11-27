@@ -288,10 +288,13 @@ export async function samTeeth(
       for (let step = 0; step < 4; step++) {
         const edge = dir < 0 ? teeth[0] : teeth[teeth.length - 1];
         let added: Cand | null = null;
-        for (const off of [0.3, 0.5, 0.7]) {
+        // outer teeth sit lower than the row mean when the arch curves, so a probe on the row can land on gum (and return the whole frame): also try lower
+        const eh = edge.y1 - edge.y0 + 1;
+        for (const [off, yo] of [[0.3, 0], [0.5, 0], [0.7, 0], [0.3, 0.35], [0.5, 0.35], [0.7, 0.35], [0.5, 0.7]] as const) {
           const px = dir < 0 ? edge.x0 - off * wAvg : edge.x1 + off * wAvg;
-          if (px < 2 || px > ow - 2) continue;
-          const k = await decodeAt(px / ow, rowY / oh, 0.6);
+          const py = rowY + yo * eh;
+          if (px < 2 || px > ow - 2 || py > oh - 2) continue;
+          const k = await decodeAt(px / ow, py / oh, 0.6);
           if (!k) continue;
           const kw = k.x1 - k.x0 + 1, kh = k.y1 - k.y0 + 1;
           const solid = k.area / (kw * kh);
