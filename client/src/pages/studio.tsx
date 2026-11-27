@@ -1026,7 +1026,9 @@ function drawGuides(
     for (const tt of design.teeth) {
       const ys = tt.pts.map((q) => q.y), xs = tt.pts.map((q) => q.x);
       g.fillStyle = tt.src === "ratio" ? "#fde047" : "#e9d5ff";
-      g.fillText(tt.src, (Math.min(...xs) + Math.max(...xs)) / 2, Math.min(...ys) - 3);
+      const tw = Math.max(...xs) - Math.min(...xs);
+      const word = g.measureText(tt.src).width <= tw * 0.95 ? tt.src : tt.src === "ratio" ? "R" : "T"; // narrow tooth: one letter (T traced, R ratio) so tags never overlap
+      g.fillText(word, (Math.min(...xs) + Math.max(...xs)) / 2, Math.min(...ys) - 3);
     }
   }
   if (selected !== null) {
