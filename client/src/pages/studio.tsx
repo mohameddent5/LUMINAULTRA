@@ -714,23 +714,30 @@ async function gradeFrame(c: HTMLCanvasElement): Promise<Graded> {
 async function refineWithSam(g: Graded, onProgress?: (f: number) => void): Promise<Graded> {
   try {
     const c = g.c;
-    const k = Math.min(1, 1280 / Math.max(c.width, c.height));
-    let sc = c;
-    if (k < 1) {
-      sc = document.createElement("canvas");
-      sc.width = Math.round(c.width * k);
-      sc.height = Math.round(c.height * k);
-      sc.getContext("2d")!.drawImage(c, 0, 0, sc.width, sc.height);
+    // The finder is size-sensitive (a few percent change in width can flip accept/refuse), so a refusal is retried at 0.8x and 1.25x.
+    const k0 = Math.min(1, 1280 / Math.max(c.width, c.height));
+    let sam: Awaited<ReturnType<typeof samTeeth>> = null;
+    let k = k0;
+    for (const f of [1, 0.8, 1.25]) {
+      k = k0 * f;
+      let sc = c;
+      if (k !== 1) {
+        sc = document.createElement("canvas");
+        sc.width = Math.round(c.width * k);
+        sc.height = Math.round(c.height * k);
+        sc.getContext("2d")!.drawImage(c, 0, 0, sc.width, sc.height);
+      }
+      let roi: { x: number; y: number; w: number; h: number } | null = null;
+      if (!g.analysis.close) {
+        const xs = g.analysis.polygon.map((p) => p.x * k);
+        const ys = g.analysis.polygon.map((p) => p.y * k);
+        const mw = Math.max(...xs) - Math.min(...xs);
+        const mh = Math.max(...ys) - Math.min(...ys);
+        roi = { x: Math.min(...xs) - mw * 0.1, y: Math.min(...ys) - mh * 0.3, w: mw * 1.2, h: mh * 1.6 };
+      }
+      sam = await samTeeth(sc, roi, f === 1 ? onProgress : undefined);
+      if (sam) break;
     }
-    let roi: { x: number; y: number; w: number; h: number } | null = null;
-    if (!g.analysis.close) {
-      const xs = g.analysis.polygon.map((p) => p.x * k);
-      const ys = g.analysis.polygon.map((p) => p.y * k);
-      const mw = Math.max(...xs) - Math.min(...xs);
-      const mh = Math.max(...ys) - Math.min(...ys);
-      roi = { x: Math.min(...xs) - mw * 0.1, y: Math.min(...ys) - mh * 0.3, w: mw * 1.2, h: mh * 1.6 };
-    }
-    const sam = await samTeeth(sc, roi, onProgress);
     if (!sam) return { ...g, sam: null };
     const region = buildRegion(c, g.analysis.polygon);
     if (!region) return { ...g, sam: null };

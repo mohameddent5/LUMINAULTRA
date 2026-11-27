@@ -9,12 +9,13 @@ await p.goto("http://localhost:5058/", { waitUntil: "networkidle2" });
 for (const it of man.filter(x => names.includes(x.name))) {
   const data = fs.readFileSync(it.photo).toString("base64");
   const mime = it.photo.endsWith(".png") ? "image/png" : "image/jpeg";
-  const r = await p.evaluate(async (d, mime, W) => {
+  const r = await p.evaluate(async (d, mime, W) => { window.__UP = true; window.__RETRY = !!d && true;
     const img = new Image(); img.src = `data:${mime};base64,${d}`; await img.decode();
-    const sc = Math.min(1, W / img.naturalWidth); const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * sc); c.height = Math.round(img.naturalHeight * sc);
+    const sc = (window.__UP ? W / img.naturalWidth : Math.min(1, W / img.naturalWidth)); const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * sc); c.height = Math.round(img.naturalHeight * sc);
     c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
     for (let i = 0; i < 50 && !window.__sam; i++) await new Promise(r => setTimeout(r, 200));
-    const res = await window.__sam(c, null);
+    let res = await window.__sam(c, null);
+    if (!res && window.__RETRY) for (const f of [0.8, 1.25]) { const c2 = document.createElement("canvas"); c2.width = Math.round(c.width * f); c2.height = Math.round(c.height * f); c2.getContext("2d").drawImage(c, 0, 0, c2.width, c2.height); res = await window.__sam(c2, null); if (res) { res.borders = res.borders.map(x => x / f); res.w = c.width; break; } }
     return res ? { w: c.width, count: res.count, borders: res.borders, boxes: res.boxes, lower: res.lowerBoxes } : null;
   }, data, mime, W);
   const truth = it.truth, TOL = 14;
