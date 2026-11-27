@@ -103,11 +103,11 @@ export async function samTeeth(
   console.info(`[sam] encoder ${Math.round(performance.now() - tEnc0)} ms, load+prep ${Math.round(tEnc0 - t0)} ms`);
   const lt0 = pct(lum, 50) * 0.95;
   const rt0 = pct(red, 70);
-  const decodeAt = async (fx: number, fy: number, minIou: number): Promise<Cand | null> => {
+  const decodeAt = async (fx: number, fy: number, minIou: number, neg: { x: number; y: number }[] = []): Promise<Cand | null> => {
     const out = await dec.run({
       image_embeddings: emb,
-      point_coords: new ort.Tensor("float32", Float32Array.from([fx * sw, fy * sh]), [1, 1, 2]),
-      point_labels: new ort.Tensor("float32", Float32Array.from([1]), [1, 1]),
+      point_coords: new ort.Tensor("float32", Float32Array.from([fx * sw, fy * sh, ...neg.flatMap((q) => [q.x * sw, q.y * sh])]), [1, 1 + neg.length, 2]),
+      point_labels: new ort.Tensor("float32", Float32Array.from([1, ...neg.map(() => 0)]), [1, 1 + neg.length]),
       mask_input: new ort.Tensor("float32", new Float32Array(256 * 256), [1, 1, 256, 256]),
       has_mask_input: new ort.Tensor("float32", Float32Array.from([0]), [1]),
       orig_im_size: new ort.Tensor("float32", Float32Array.from([oh, ow]), [2]),
@@ -198,6 +198,32 @@ export async function samTeeth(
     }
   }
   if (teeth.length < 3) return null;
+  // two neighbouring teeth are often returned as one merged mask: ask again for the gap between accepted teeth, telling the model which teeth are NOT wanted
+  {
+    const rowY0 = teeth.reduce((a, t) => a + t.cy, 0) / teeth.length;
+    for (let round = 0; round < 3; round++) {
+      let added = false;
+      for (let ix = 0; ix < G; ix++) {
+        const fx = 0.04 + (0.92 * ix) / (G - 1);
+        const pxx = fx * ow;
+        if (teeth.some((t) => pxx >= t.x0 && pxx <= t.x1)) continue;
+        const pi = Math.min(oh - 1, Math.floor((rowY0 / oh) * oh)) * ow + Math.min(ow - 1, Math.floor(pxx));
+        if (lum[pi] < lt * 0.9 || red[pi] > rt) continue;
+        const negs = [...teeth].sort((a, b) => Math.abs((a.x0 + a.x1) / 2 - pxx) - Math.abs((b.x0 + b.x1) / 2 - pxx)).slice(0, 3).map((t) => ({ x: (t.x0 + t.x1) / 2 / ow, y: t.cy / oh }));
+        const k = await decodeAt(fx, rowY0 / oh, 0.7, negs);
+        if (!k || !okShape(k) || !(k.lum > lt && k.red < rt)) continue;
+        if (Math.abs(k.cy - big.cy) >= 0.55 * bigH) continue;
+        const kw = k.x1 - k.x0 + 1;
+        const wMed = teeth.map((t) => t.x1 - t.x0 + 1).sort((a, b) => a - b)[Math.floor(teeth.length / 2)];
+        if (kw < 0.4 * wMed || kw > 1.6 * wMed) continue;
+        const ov = (t: Cand) => Math.max(0, Math.min(t.x1, k.x1) - Math.max(t.x0, k.x0)) / Math.min(t.x1 - t.x0 + 1, kw);
+        if (teeth.some((t) => ov(t) > 0.25)) continue;
+        teeth = [...teeth, k].sort((a, b) => (a.x0 + a.x1) - (b.x0 + b.x1));
+        added = true;
+      }
+      if (!added) break;
+    }
+  }
   // outer teeth are narrow and shadowed, so the coarse grid often misses them: probe outward along the row
   {
     const overl = (a: Cand, k: Cand) => Math.max(0, Math.min(a.x1, k.x1) - Math.max(a.x0, k.x0)) / Math.max(1, Math.min(a.x1 - a.x0 + 1, k.x1 - k.x0 + 1));
