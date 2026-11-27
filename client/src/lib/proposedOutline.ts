@@ -29,7 +29,11 @@ export const PROPOSAL_LABEL = "Proposed design: a starting point for the dentist
 
 const LABELS = ["central", "lateral", "canine"];
 
-const CERVICAL_BIAS = 0.066;
+// Evidence (his labeled cyan lines, private photos): mask top sits above his cervical line by a median 6.6% of tooth height on ex17-21 (29 teeth),
+// and 10.4% / 13.9% on held-out independent subjects ex26 (n=6) / ex27 (n=8). Per-photo median abs error 6.6% -> 8.5%:
+// ex18 .049>.035, ex19 .046>.037, ex20 .037=.037, ex21 .038=.038, ex26 .039>.030, ex27 .074>.055 (no photo worse).
+// 8.5% is a pooled-data value, NOT a literature value; no cited paper gives this offset for a mask top. Labels are +-2 px (about 5%) noise.
+const CERVICAL_BIAS = 0.085;
 
 export function proposeOutline(upper: Tooth[], region: { x0: number; y0: number }, gumSeen: boolean, tierOk: boolean, lip: Pt[] | null = null): Proposal {
   if (!tierOk) return { ok: false, reason: "The photo checks did not pass, so no design is drawn." };
