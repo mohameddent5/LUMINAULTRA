@@ -1465,7 +1465,7 @@ export default function Studio() {
         g2.font = `bold ${Math.max(12, Math.round(o.width / 70))}px sans-serif`;
         g2.fillStyle = "#facc15";
         g2.textAlign = "center";
-        for (const t of engine.teeth) if (ids.has(t.id)) g2.fillText("check", t.bx + region.x0 + t.bw / 2, t.by + region.y0 - 4);
+        for (const t of engine.teeth) if (ids.has(t.id)) g2.fillText(g2.measureText("check").width <= t.bw * 0.95 ? "check" : "!", t.bx + region.x0 + t.bw / 2, t.by + region.y0 - 4);
       }
     }
   }, [step, region, level, hasPhoto, engine, smooth, straighten, balance, enamel, edits, showGuides, sel, showFace, analysis, lowerBoxes, showDetect, shapeOk, quality]);
