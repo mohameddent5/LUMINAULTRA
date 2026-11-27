@@ -1370,12 +1370,16 @@ export default function Studio() {
     let design: Proposal | null = null;
     if (engine && region && showGuides) {
       const upT = engine.teeth.filter((t) => t.incisalDown);
-      design = proposeOutline(upT, region, gumVisibleShare(o, region, upT) >= 0.5, true);
+      design = analysis?.close
+        ? { ok: false, reason: "This is a close-up of the teeth with no face in frame, so the facial midline and lips cannot be checked. No design is drawn." }
+        : !shapeOk
+          ? { ok: false, reason: "The teeth are not clear and separate enough to draw a design honestly (damaged, merged or crowded outlines). No design is drawn." }
+          : proposeOutline(upT, region, gumVisibleShare(o, region, upT) >= 0.5, true, analysis && !analysis.close && analysis.outerLip ? analysis.polygon : null);
     } else if (engine && region) design = { ok: false, reason: "The photo checks did not pass, so no design is drawn." };
     const dn = design ? (design.ok ? { ok: true, text: design.notes.join(" ") } : { ok: false, text: design.reason }) : null;
     setDesignNote((p) => (p && dn && p.ok === dn.ok && p.text === dn.text ? p : dn));
     if (guideRef.current) drawGuides(guideRef.current, o, region, engine, showDetect, sel, showFace ? analysis?.face : null, lowerBoxes, analysis && !analysis.close && analysis.outerLip ? { inner: analysis.polygon, outer: analysis.outerLip } : null, design);
-  }, [step, region, level, hasPhoto, engine, smooth, straighten, balance, enamel, edits, showGuides, sel, showFace, analysis, lowerBoxes, showDetect]);
+  }, [step, region, level, hasPhoto, engine, smooth, straighten, balance, enamel, edits, showGuides, sel, showFace, analysis, lowerBoxes, showDetect, shapeOk]);
 
   /* option previews (whitening / bonding / veneers style) */
   useEffect(() => {

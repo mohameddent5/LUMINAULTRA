@@ -10,6 +10,8 @@
  *  - Central width/length 77.5% (natural preset 75 to 80%), dsdProtocol.ts PRESETS.natural. Guide, not validated on his photos.
  *  - Symmetry about the dental midline: general DSD convention (guide). The facial midline offset is not corrected here.
  *  - Incisal edge: each left/right pair takes the average of the two detected edge heights (symmetry rule). No invented edge shape.
+ *  - Lower-lip following (only when a whole face was found): edge heights are moved to follow the face-mesh lower-lip curve at the same
+ *    median distance as the detected edges (consonant smile arc, guide: classifySmileArc in dsdProtocol.ts). Not validated on his photos.
  *  - Total width per side is kept equal to the average detected width per side, so the design never moves tooth edges outward beyond the detected span.
  * Not used: zenith, papilla, lower-lip following, buccal corridor (no reliable detection yet). The layer says so.
  */
@@ -27,7 +29,7 @@ export const PROPOSAL_LABEL = "Proposed design: a starting point for the dentist
 
 const LABELS = ["central", "lateral", "canine"];
 
-export function proposeOutline(upper: Tooth[], region: { x0: number; y0: number }, gumSeen: boolean, tierOk: boolean): Proposal {
+export function proposeOutline(upper: Tooth[], region: { x0: number; y0: number }, gumSeen: boolean, tierOk: boolean, lip: Pt[] | null = null): Proposal {
   if (!tierOk) return { ok: false, reason: "The photo checks did not pass, so no design is drawn." };
   const up = [...upper].sort((a, b) => a.cx - b.cx);
   if (up.length < 6) return { ok: false, reason: "Fewer than 6 clear upper teeth were found, so no design is drawn." };
@@ -48,6 +50,33 @@ export function proposeOutline(upper: Tooth[], region: { x0: number; y0: number 
   const cH = widths[0] / WIDTH_LENGTH;
   const cBottom = (a: Tooth, b: Tooth) => (a.by + a.bh + b.by + b.bh) / 2;
   void cBottom; void cH;
+  // lower-lip curve (inner lip ring, lower half) in region coordinates, or null
+  let lipY: ((x: number) => number | null) | null = null;
+  if (lip && lip.length > 6) {
+    const my = lip.reduce((a, q) => a + q.y, 0) / lip.length;
+    const low = lip.filter((q) => q.y >= my).map((q) => ({ x: q.x - region.x0, y: q.y - region.y0 })).sort((a, b) => a.x - b.x);
+    if (low.length >= 4) {
+      lipY = (x) => {
+        if (x < low[0].x || x > low[low.length - 1].x) return null;
+        for (let i = 0; i < low.length - 1; i++) if (x >= low[i].x && x <= low[i + 1].x) { const k = (x - low[i].x) / Math.max(1e-6, low[i + 1].x - low[i].x); return low[i].y + k * (low[i + 1].y - low[i].y); }
+        return null;
+      };
+    }
+  }
+  const pairY = (i: number): number => (left[i].by + left[i].bh + right[i].by + right[i].bh) / 2;
+  const pairX = (i: number): [number, number] => [left[i].cx, right[i].cx];
+  const lipEdge: (number | null)[] = [0, 1, 2].map((i) => {
+    if (!lipY) return null;
+    const [a, b] = pairX(i);
+    const ya = lipY(a), yb2 = lipY(b);
+    return ya === null || yb2 === null ? null : (ya + yb2) / 2;
+  });
+  let lipGap: number | null = null;
+  if (lipEdge.every((v) => v !== null)) {
+    const gaps = [0, 1, 2].map((i) => (lipEdge[i] as number) - pairY(i)).sort((a, b) => a - b);
+    lipGap = gaps[1];
+    if (lipGap <= 0) lipGap = null;
+  }
   const out: ProposedTooth[] = [];
   const ox = region.x0, oy = region.y0;
   const notes: string[] = [];
@@ -58,7 +87,7 @@ export function proposeOutline(upper: Tooth[], region: { x0: number; y0: number 
       const w = widths[i];
       const xa = x, xb = x + side * w; // xa is mesial
       const xl = Math.min(xa, xb), xr = Math.max(xa, xb);
-      const yb = (left[i].by + left[i].bh + right[i].by + right[i].bh) / 2; // incisal edge: left/right pair averaged (symmetry)
+      const yb = lipGap !== null ? (lipEdge[i] as number) - lipGap : pairY(i); // incisal edge: follows the lower lip when a face was found, else left/right pair averaged (symmetry)
       const det = pair[i];
       const topDetected = (left[i].by + right[i].by) / 2;
       // without visible gum the tooth top is hidden: keep the visible top. With gum, top = height from the width/length target (not above the detected top)
@@ -84,6 +113,7 @@ export function proposeOutline(upper: Tooth[], region: { x0: number; y0: number 
     }
   }
   notes.push(gumSeen ? "Gum shows: tooth tops are drawn at the detected level, made symmetric." : "Gum is not visible in this smile, so tooth tops (cervical line, zenith) are not drawn.");
-  notes.push("Rules: RED 75% width steps, width/length 77.5%, symmetry about the dental midline. Lower lip, zenith and papilla are not used yet.");
+  notes.push(lipGap !== null ? "Incisal edge follows the lower lip curve." : "Lower lip not available, so the incisal edge is the symmetrised detected edge.");
+  notes.push("Rules: RED 75% width steps, width/length 77.5%, symmetry about the dental midline. Zenith and papilla are not used yet.");
   return { ok: true, teeth: out, midX: midX + ox, notes };
 }
