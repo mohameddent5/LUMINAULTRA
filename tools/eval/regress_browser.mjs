@@ -23,8 +23,9 @@ for (const it of man.filter(x => names.includes(x.name))) {
   let row = { name: it.name, truthN: truth.length, refused: !r };
   if (r) {
     const f = r.borders.map(x => x * (1280 / r.w));
-    const hit = truth.filter(t => f.some(c => Math.abs(c - t) <= TOL)).length;
-    const good = f.filter(c => truth.some(t => Math.abs(c - t) <= TOL)).length;
+    const pairs = []; truth.forEach((t, i) => f.forEach((c, j) => { if (Math.abs(c - t) <= TOL) pairs.push([Math.abs(c - t), i, j]); })); pairs.sort((x, y) => x[0] - y[0]);
+    const ut = new Set(), uf = new Set(); for (const [, i, j] of pairs) { if (ut.has(i) || uf.has(j)) continue; ut.add(i); uf.add(j); }
+    const hit = ut.size, good = uf.size;
     const errs = truth.map(t => Math.min(...f.map(c => Math.abs(c - t)))).sort((a, b) => a - b);
     row = { ...row, found: f.length, hits: hit, recall: hit / truth.length, precision: f.length ? good / f.length : null, medErr: Math.round(errs[Math.floor(errs.length / 2)]), teeth: r.count, lower: (r.lower || []).length, borders: f.map(Math.round) };
   }
