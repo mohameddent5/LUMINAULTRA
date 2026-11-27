@@ -38,7 +38,24 @@ export function lesionFlags(e: TeethEngine | null): ToothFlag[] {
       if (veryDark || brown) dark++;
     }
     const share = dark / n;
-    if (share >= 0.12) out.push({ id: t.id, share, level: share >= 0.3 ? "marked" : "possible" });
+    // Holes: very dark or brown pixels inside the box interior that SAM cut out of the tooth mask (a cavity often is
+    // not part of the mask). Fitted on one severe-caries photo (a 18% hole on a marked tooth) against healthy maxima
+    // of 10% (ex26, ex27, ex2, be3c1457): threshold 14% sits between them. NEITHER-sourced, n=1 positive.
+    const er = e.erased;
+    let hd = 0;
+    for (let y = r; y < H - r; y++) for (let x = r; x < W - r; x++) {
+      if (d[(y * W + x) * 4 + 3] > 0) continue;
+      const X = t.bx + x, Y = t.by + y;
+      if (X < 0 || Y < 0 || X >= er.width || Y >= er.height) continue;
+      const j = (Y * er.width + X) * 4;
+      const R = er.data[j], G = er.data[j + 1], B = er.data[j + 2];
+      const l = 0.299 * R + 0.587 * G + 0.114 * B;
+      const mx = Math.max(R, G, B), mn = Math.min(R, G, B);
+      const sat = mx ? (mx - mn) / mx : 0;
+      if (l < ref * 0.45 || (R > G && G > B && sat > 0.5 && l < ref * 0.7)) hd++;
+    }
+    const hole = hd / Math.max(1, (W - 2 * r) * (H - 2 * r));
+    if (share >= 0.12 || hole >= 0.14) out.push({ id: t.id, share: Math.max(share, hole), level: share >= 0.3 ? "marked" : "possible" });
   }
   return out;
 }
