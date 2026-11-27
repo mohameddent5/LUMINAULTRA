@@ -56,6 +56,10 @@ function pct(a: Float32Array, p: number): number {
   return s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))];
 }
 
+/** Share of near-white pixels above which the crop is darkened, and by how much. NEITHER-sourced: set by hand from one synthetic overexposure test. */
+const SAT_LIMIT = 0.12;
+const SAT_SCALE = 0.65;
+
 export async function samTeeth(
   canvas: HTMLCanvasElement,
   roi?: SamBox | null,
@@ -76,7 +80,19 @@ export async function samTeeth(
   c.height = sh;
   const cx = c.getContext("2d", { willReadFrequently: true })!;
   cx.drawImage(canvas, rx, ry, rw, rh, 0, 0, sw, sh);
-  const px = cx.getImageData(0, 0, sw, sh).data;
+  const idat = cx.getImageData(0, 0, sw, sh);
+  const px = idat.data;
+  {
+    // exposure guard: if a lot of the crop is clipped white, tooth edges vanish into the gaps. Scale it down before the model sees it.
+    let sat = 0;
+    for (let i = 0; i < sw * sh; i++) if (px[i * 4] >= 245 && px[i * 4 + 1] >= 245 && px[i * 4 + 2] >= 245) sat++;
+    const frac = sat / (sw * sh);
+    if (frac > SAT_LIMIT) {
+      for (let i = 0; i < sw * sh; i++) { px[i * 4] *= SAT_SCALE; px[i * 4 + 1] *= SAT_SCALE; px[i * 4 + 2] *= SAT_SCALE; }
+      cx.putImageData(idat, 0, 0);
+      console.log("[sam] exposure guard, clipped share", frac.toFixed(3));
+    }
+  }
   const img = new Float32Array(sw * sh * 3);
   for (let i = 0; i < sw * sh; i++) {
     img[i * 3] = px[i * 4]; img[i * 3 + 1] = px[i * 4 + 1]; img[i * 3 + 2] = px[i * 4 + 2];
