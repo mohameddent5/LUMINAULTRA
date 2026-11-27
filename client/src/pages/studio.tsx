@@ -1033,6 +1033,21 @@ function tierOf(q: CaptureQuality | null, e: TeethEngine | null, closeUp = false
   return "B";
 }
 
+const RETAKE_TIPS: Record<Lang, Record<string, string>> = {
+  en: {
+    resolution: "The photo is too small to see the teeth. Use the phone's back camera and hold it about an arm's length away, so the whole smile fills the frame.",
+    sharpness: "The photo is blurry. Hold the phone still with both hands, tap the teeth on the screen to focus, and wipe the lens.",
+    exposure: "The light is too dark or too bright. Face a window or a lamp, and avoid flash and strong light from behind.",
+    mouthVisibility: "The teeth are not clear. Smile wide so the upper teeth show, and look straight at the camera.",
+  },
+  ar: {
+    resolution: "الصورة صغيرة جدا ولا تظهر الأسنان بوضوح. استخدم الكاميرا الخلفية وأبقها على بعد ذراع تقريبا ليملأ الابتسام الإطار.",
+    sharpness: "الصورة غير واضحة. ثبّت الهاتف بكلتا اليدين، المس الأسنان على الشاشة للتركيز، وامسح العدسة.",
+    exposure: "الإضاءة ضعيفة أو قوية جدا. واجه نافذة أو مصباحا وتجنب الفلاش والضوء من الخلف.",
+    mouthVisibility: "الأسنان غير واضحة. ابتسم ابتسامة واسعة لتظهر الأسنان العليا وانظر مباشرة إلى الكاميرا.",
+  },
+};
+
 const LOOKS = [
   { key: "natural", level: 0.35 },
   { key: "fresh", level: 0.6 },
@@ -1775,6 +1790,7 @@ export default function Studio() {
 
   const Next = lang === "ar" ? ArrowLeft : ArrowRight;
   const Prev = lang === "ar" ? ArrowRight : ArrowLeft;
+  const needRetake = step === 2 && !!quality && !quality.acceptable;
   const canNext = step === 0 ? consent : step === 2 ? true : false;
 
   return (
@@ -2055,7 +2071,7 @@ export default function Studio() {
                       </span>
                     </p>
                     <p className={`text-base ${muted}`}>{tier === "A" ? t.tierA : tier === "B" ? t.tierB : t.tierC}</p>
-                    {!bracesSuspected(engine) && lesionFlags(engine).length > 0 && (
+                    {!bracesSuspected(engine) && quality.acceptable && lesionFlags(engine).length > 0 && (
                       <p className={`text-base ${muted}`} data-testid="flag-caries">
                         Possible caries on {lesionFlags(engine).length} {lesionFlags(engine).length > 1 ? "teeth" : "tooth"} (dark or brown patches). Not a diagnosis. Verify clinically. Colour only: stain, calculus or a dark filling look the same.
                       </p>
@@ -2069,9 +2085,9 @@ export default function Studio() {
                     ) : (
                       <>
                         <p className={`text-base ${muted}`}>{t.relLowWhy}</p>
-                        <ul className={`text-base list-disc ps-6 ${muted}`}>
-                          {quality.reasons.map((x) => (
-                            <li key={x}>{x}</li>
+                        <ul className={`text-base list-disc ps-6 ${muted}`} data-testid="retake-tips">
+                          {quality.signals.filter((x) => !x.ok).map((x) => (
+                            <li key={x.id}>{RETAKE_TIPS[lang][x.id] ?? x.note}</li>
                           ))}
                         </ul>
                       </>
@@ -2242,7 +2258,7 @@ export default function Studio() {
       <div className="fixed bottom-0 inset-x-0 z-20 bg-black/70 backdrop-blur border-t border-white/10 px-4 py-3">
         <div className="max-w-4xl mx-auto flex gap-3">
           <button
-            className={ghost}
+            className={needRetake ? `${primary} flex-1` : ghost}
             disabled={step === 0}
             onClick={() => {
               if (step === 2) {
@@ -2255,7 +2271,7 @@ export default function Studio() {
             {step === 2 ? t.retake : t.back}
           </button>
           {step < 3 && step !== 1 && (
-            <button className={`${primary} flex-1`} disabled={!canNext} onClick={() => setStep(step + 1)}>
+            <button className={needRetake ? `${ghost} flex-1` : `${primary} flex-1`} disabled={!canNext} onClick={() => setStep(step + 1)}>
               {t.next}
               <Next className="w-5 h-5" aria-hidden />
             </button>
