@@ -35,6 +35,8 @@ function load() {
 
 export interface SamBox { x: number; y: number; w: number; h: number }
 export interface SamTeeth {
+  /** set by samTeethRobust when the result was found on a rescaled canvas: coordinates are in that scaled frame (canvas size times scale) */
+  scale?: number;
   /** canvas sized, 0 = no tooth, 1..count = tooth id (left to right) */
   labels: Int32Array;
   w: number;
@@ -355,4 +357,75 @@ export async function samTeeth(
     .map((t) => ({ x0: rx + t.x0 / (sc * Q), x1: rx + t.x1 / (sc * Q), y0: ry + t.y0 / (sc * Q), y1: ry + t.y1 / (sc * Q) }))
     .sort((a, b) => a.x0 - b.x0);
   return { labels, w: canvas.width, h: canvas.height, count: teeth.length, boxes, lowerBoxes, borders, ms: performance.now() - t0 };
+}
+
+/** A result found only by a fallback must show at least this many upper teeth, else the frame stays refused (ex8 fallback gave 3 teeth, 2 of 10 borders right, 91 px median error: worse than refusing). NEITHER-sourced. */
+const MIN_FALLBACK_TEETH = 5;
+
+/** Box around the biggest bright, low-red blob (tooth-like colour), padded. Used only when no face ROI is known. NEITHER-sourced thresholds. */
+function autoToothRoi(canvas: HTMLCanvasElement): SamBox | null {
+  const w = 160, h = Math.max(8, Math.round((canvas.height / canvas.width) * 160));
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const cx = c.getContext("2d", { willReadFrequently: true })!;
+  cx.drawImage(canvas, 0, 0, w, h);
+  const d = cx.getImageData(0, 0, w, h).data;
+  const m = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    const r = d[i * 4], g = d[i * 4 + 1], b = d[i * 4 + 2];
+    const l = 0.299 * r + 0.587 * g + 0.114 * b;
+    m[i] = l > 120 && (r - g) / (l + 1) < 0.3 && (r - b) / (l + 1) < 0.6 ? 1 : 0;
+  }
+  const seen = new Uint8Array(w * h);
+  let best: { n: number; x0: number; x1: number; y0: number; y1: number } | null = null;
+  for (let s = 0; s < w * h; s++) {
+    if (!m[s] || seen[s]) continue;
+    const st = [s]; seen[s] = 1;
+    let n = 0, x0 = w, x1 = 0, y0 = h, y1 = 0;
+    while (st.length) {
+      const p = st.pop()!;
+      const x = p % w, y = (p / w) | 0;
+      n++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      for (const q of [p - 1, p + 1, p - w, p + w, p - w - 1, p - w + 1, p + w - 1, p + w + 1]) {
+        if (q < 0 || q >= w * h || seen[q] || !m[q]) continue;
+        if ((q % w === 0 && p % w === w - 1) || (q % w === w - 1 && p % w === 0)) continue;
+        seen[q] = 1; st.push(q);
+      }
+    }
+    if (!best || n > best.n) best = { n, x0, x1, y0, y1 };
+  }
+  if (!best || best.n < 0.01 * w * h) return null;
+  const k = canvas.width / w;
+  const bw = (best.x1 - best.x0 + 1) * k, bh = (best.y1 - best.y0 + 1) * k;
+  const x = Math.max(0, best.x0 * k - 0.15 * bw), y = Math.max(0, best.y0 * k - 0.25 * bh);
+  return { x, y, w: Math.min(canvas.width - x, bw * 1.3), h: Math.min(canvas.height - y, bh * 1.5) };
+}
+
+/**
+ * samTeeth with fallbacks for a refused frame: (1) retry at 0.8x and 1.25x (the finder is size-sensitive),
+ * (2) with no face ROI, retry inside an automatic tooth-colour ROI, at those scales too.
+ */
+export async function samTeethRobust(canvas: HTMLCanvasElement, roi?: SamBox | null, onProgress?: (f: number) => void): Promise<SamTeeth | null> {
+  const first = await samTeeth(canvas, roi, onProgress);
+  if (first) return first;
+  const scaled = (f: number) => {
+    const c2 = document.createElement("canvas");
+    c2.width = Math.round(canvas.width * f); c2.height = Math.round(canvas.height * f);
+    c2.getContext("2d")!.drawImage(canvas, 0, 0, c2.width, c2.height);
+    return c2;
+  };
+  for (const f of [0.8, 1.25]) {
+    const r = await samTeeth(scaled(f), roi ? { x: roi.x * f, y: roi.y * f, w: roi.w * f, h: roi.h * f } : null);
+    if (r && r.count >= MIN_FALLBACK_TEETH) return { ...r, scale: f };
+  }
+  if (!roi) {
+    const a = autoToothRoi(canvas);
+    if (a) {
+      for (const f of [1, 0.8, 1.25]) {
+        const r = await samTeeth(f === 1 ? canvas : scaled(f), { x: a.x * f, y: a.y * f, w: a.w * f, h: a.h * f });
+        if (r && r.count >= MIN_FALLBACK_TEETH) return { ...r, scale: f };
+      }
+    }
+  }
+  return null;
 }
