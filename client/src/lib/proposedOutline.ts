@@ -18,7 +18,7 @@
 import type { Tooth } from "./smileEngine";
 
 export type Pt = { x: number; y: number };
-export interface ProposedTooth { label: string; pts: Pt[]; closed: boolean }
+export interface ProposedTooth { label: string; pts: Pt[]; closed: boolean; src: "traced" | "ratio" }
 export type Proposal =
   | { ok: true; teeth: ProposedTooth[]; midX: number; notes: string[] }
   | { ok: false; reason: string };
@@ -34,8 +34,14 @@ const LABELS = ["central", "lateral", "canine"];
 // ex18 .049>.035, ex19 .046>.037, ex20 .037=.037, ex21 .038=.038, ex26 .039>.030, ex27 .074>.055 (no photo worse).
 // 8.5% is a pooled-data value, NOT a literature value; no cited paper gives this offset for a mask top. Labels are +-2 px (about 5%) noise.
 const CERVICAL_BIAS = 0.085;
+// Zenith distal offset as a share of tooth width, central / lateral / canine. Follows the literature per Mohamed's decision (Telegram 26050818).
+// Chu 2009 (PMID 19368601): central 1 mm of a typical 8.6 mm central = 0.116; lateral 0.4 mm of 6.45 mm = 0.062; canine 97.5% centralized = 0.
+// His own labels put the zenith at the centre (about 0.00 to 0.03, n=14, ex26/ex27); recorded as a disagreement in docs/priors-and-methods.md.
+const ZENITH_DISTAL = [0.116, 0.062, 0];
+// A detected tooth counts as traced when its width is within 25% of the ratio width (NEITHER-sourced) and it is not flagged CHECK.
+const TRACE_WIDTH_TOL = 0.25;
 
-export function proposeOutline(upper: Tooth[], region: { x0: number; y0: number }, gumSeen: boolean, tierOk: boolean, lip: Pt[] | null = null): Proposal {
+export function proposeOutline(upper: Tooth[], region: { x0: number; y0: number }, gumSeen: boolean, tierOk: boolean, lip: Pt[] | null = null, checkIds: number[] = []): Proposal {
   if (!tierOk) return { ok: false, reason: "The photo checks did not pass, so no design is drawn." };
   const up = [...upper].sort((a, b) => a.cx - b.cx);
   if (up.length < 6) return { ok: false, reason: "Fewer than 6 clear upper teeth were found, so no design is drawn." };
@@ -86,42 +92,60 @@ export function proposeOutline(upper: Tooth[], region: { x0: number; y0: number 
   const out: ProposedTooth[] = [];
   const ox = region.x0, oy = region.y0;
   const notes: string[] = [];
+  const bad = new Set(checkIds);
+  const isTraced = (i: number) => [left[i], right[i]].every((d) => Math.abs(d.bw - widths[i]) / widths[i] <= TRACE_WIDTH_TOL && !bad.has(d.id));
+  const ybOwn = (i: number) => (lipGap !== null ? (lipEdge[i] as number) - lipGap : pairY(i));
+  const tracedYb = [0, 1, 2].filter(isTraced).map(ybOwn);
+  const ybRatio = tracedYb.length ? tracedYb.reduce((a, v) => a + v, 0) / tracedYb.length : null;
+  let nRatio = 0;
   for (const side of [-1, 1] as const) {
-    const pair = side < 0 ? left : right;
     let x = midX;
     for (let i = 0; i < 3; i++) {
       const w = widths[i];
       const xa = x, xb = x + side * w; // xa is mesial
       const xl = Math.min(xa, xb), xr = Math.max(xa, xb);
-      const yb = lipGap !== null ? (lipEdge[i] as number) - lipGap : pairY(i); // incisal edge: follows the lower lip when a face was found, else left/right pair averaged (symmetry)
-      const det = pair[i];
-      // detected mask tops sit above his hand-drawn cervical line by a median 6.6% of tooth height (29 teeth, 5 photos, ex17 to ex21, leave-one-photo-out improved 4 of 4 design-eligible photos); move the detected top down by that share
+      const traced = isTraced(i);
+      if (!traced) nRatio++;
+      // incisal edge: lip curve or symmetrised pair for traced teeth; ratio-filled teeth borrow the mean edge of the traced ones
+      const yb = traced || ybRatio === null ? ybOwn(i) : ybRatio;
+      // detected mask tops sit above his hand-drawn cervical line by a median 8.5% of tooth height (see CERVICAL_BIAS); move the detected top down by that share
       const rawTop = (left[i].by + right[i].by) / 2;
       const topDetected = gumSeen ? rawTop + CERVICAL_BIAS * (yb - rawTop) : rawTop;
       // without visible gum the tooth top is hidden: keep the visible top. With gum, top = height from the width/length target (not above the detected top)
       const yt = gumSeen ? Math.max(yb - w / WIDTH_LENGTH, topDetected) : topDetected;
-      const r = Math.min(w * 0.22, (yb - yt) * 0.4);
-      // incisal corners rounded; mesial corner tighter than distal
-      const rm = r * 0.5, rd = r;
+      const h = yb - yt;
+      const r = Math.min(w * 0.22, h * 0.4);
+      const rm = r * 0.5, rd = r; // incisal corners rounded; mesial tighter than distal
       const mes = side < 0 ? xr : xl, dis = side < 0 ? xl : xr;
-      const sgn = (v: number) => (v === xl ? 1 : -1);
+      const inM = mes === xl ? 1 : -1, inD = -inM; // direction pointing into the tooth from each side
       const pts: Pt[] = [];
-      pts.push({ x: mes, y: yt });
-      pts.push({ x: mes, y: yb - rm });
-      pts.push({ x: mes + sgn(mes) * rm * 0.3, y: yb - rm * 0.3 });
-      pts.push({ x: mes + sgn(mes) * rm, y: yb });
-      pts.push({ x: dis + sgn(dis) * rd, y: yb });
-      pts.push({ x: dis + sgn(dis) * rd * 0.3, y: yb - rd * 0.3 });
-      pts.push({ x: dis, y: yb - rd });
-      pts.push({ x: dis, y: yt });
-      void det;
-      const closed = gumSeen;
-      out.push({ label: LABELS[i], pts: pts.map((p) => ({ x: p.x + ox, y: p.y + oy })), closed });
+      const sh = gumSeen ? yt + 0.18 * h : yt; // shoulder height; the neck is narrower than the crown
+      const neck = gumSeen ? 0.07 * w : 0;
+      const mesN = mes + inM * neck, disN = dis + inD * neck;
+      pts.push({ x: mesN, y: sh });
+      pts.push({ x: mes, y: yb - rm * 1.6 });
+      pts.push({ x: mes + inM * rm * 0.3, y: yb - rm * 0.3 });
+      pts.push({ x: mes + inM * rm, y: yb });
+      pts.push({ x: dis + inD * rd, y: yb });
+      pts.push({ x: dis + inD * rd * 0.3, y: yb - rd * 0.3 });
+      pts.push({ x: dis, y: yb - rd * 1.6 });
+      pts.push({ x: disN, y: sh });
+      if (gumSeen) {
+        // cervical curve over the zenith: apex distal of the tooth centre by the literature share (centrals 0.116, laterals 0.062, canines 0)
+        const apexX = (xl + xr) / 2 + (dis < mes ? -1 : 1) * 0 + (dis === xr ? 1 : -1) * ZENITH_DISTAL[i] * w;
+        const apex = { x: apexX, y: yt };
+        const q = (A: Pt, C: Pt, B: Pt, t: number): Pt => ({ x: (1 - t) * (1 - t) * A.x + 2 * (1 - t) * t * C.x + t * t * B.x, y: (1 - t) * (1 - t) * A.y + 2 * (1 - t) * t * C.y + t * t * B.y });
+        const D: Pt = { x: disN, y: sh }, M: Pt = { x: mesN, y: sh };
+        for (let k = 1; k <= 5; k++) pts.push(q(D, { x: D.x, y: yt }, apex, k / 5));
+        for (let k = 1; k <= 5; k++) pts.push(q(apex, { x: M.x, y: yt }, M, k / 5));
+      }
+      out.push({ label: LABELS[i], pts: pts.map((p) => ({ x: p.x + ox, y: p.y + oy })), closed: gumSeen, src: traced ? "traced" : "ratio" });
       x = xb;
     }
   }
+  if (nRatio > 0) notes.push(`CHECK: ${nRatio} of 6 teeth are tagged "ratio": generated from the verified ratios (RED 75%, W/L 77.5%) because the detected outline was missing, off-size or flagged. A generic ratio-based proposal, not traced from the actual tooth.`);
   notes.push(gumSeen ? "Gum shows: tooth tops are drawn at the detected level, made symmetric." : "Gum is not visible in this smile, so tooth tops (cervical line, zenith) are not drawn.");
   notes.push(lipGap !== null ? "Incisal edge follows the lower lip curve." : "Lower lip not available, so the incisal edge is the symmetrised detected edge.");
-  notes.push("Rules: RED 75% width steps, width/length 77.5%, symmetry about the dental midline. Zenith and papilla are not used yet.");
+  notes.push("Rules: RED 75% width steps, width/length 77.5%, symmetry about the dental midline, zenith distal 0.116 (central) and 0.062 (lateral) of width per Chu 2009, canine centred.");
   return { ok: true, teeth: out, midX: midX + ox, notes };
 }

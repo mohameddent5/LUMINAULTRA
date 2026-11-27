@@ -1020,6 +1020,14 @@ function drawGuides(
         g.stroke();
       }
     }
+    // tag each tooth: ratio-filled teeth carry "ratio", traced ones "traced" (small, above the tooth)
+    g.font = `bold ${Math.max(10, Math.round(o.width / 90))}px sans-serif`;
+    g.textAlign = "center";
+    for (const tt of design.teeth) {
+      const ys = tt.pts.map((q) => q.y), xs = tt.pts.map((q) => q.x);
+      g.fillStyle = tt.src === "ratio" ? "#fde047" : "#e9d5ff";
+      g.fillText(tt.src, (Math.min(...xs) + Math.max(...xs)) / 2, Math.min(...ys) - 3);
+    }
   }
   if (selected !== null) {
     const t = engine.teeth.find((x) => x.id === selected);
@@ -1440,7 +1448,7 @@ export default function Studio() {
       const upT = engine.teeth.filter((t) => t.incisalDown);
       design = !shapeOk
         ? { ok: false, reason: "The teeth are not clear and separate enough to draw a design honestly (damaged, merged or crowded outlines). No design is drawn." }
-        : proposeOutline(upT, region, gumVisibleShare(o, region, upT) >= 0.5, true, analysis && !analysis.close && analysis.outerLip ? analysis.polygon : null);
+        : proposeOutline(upT, region, gumVisibleShare(o, region, upT) >= 0.5, true, analysis && !analysis.close && analysis.outerLip ? analysis.polygon : null, checkTeeth(engine));
       if (design.ok && checkMode(quality, engine)) design = { ...design, notes: ["CHECK: braces or possible decay were flagged on this photo, so outlines on the marked teeth are less reliable. Verify each marked tooth clinically before using the design.", ...design.notes] };
       if (design.ok && analysis?.close) design = { ...design, notes: ["No face in frame: the facial midline and lips were not checked, so the dental midline is used as the reference.", ...design.notes] };
     } else if (engine && region) design = { ok: false, reason: "The photo checks did not pass, so no design is drawn." };
