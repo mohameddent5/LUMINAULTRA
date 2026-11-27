@@ -22,9 +22,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [syncBad, setSyncBad] = useState(false);
+  const [tempStore, setTempStore] = useState(false); // server has no database: saved cases would vanish on a server restart
 
   const enter = async (user: { id: string }) => {
     await hydrate(user.id);
+    fetch("/api/health").then((r) => r.json()).then((h) => setTempStore(h && h.database === false)).catch(() => {});
     installWriteThrough();
     setState("in");
   };
@@ -59,6 +61,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return (
       <>
         {children}
+        {tempStore && !syncBad && (
+          <div data-testid="temp-store" className="fixed bottom-3 left-3 z-[100] rounded bg-amber-900/90 text-amber-100 text-xs px-3 py-2">
+            This server has no database connected, so saved cases are kept in this browser and in server memory only. A server restart loses the server copy, and clearing this browser loses the browser copy. There is no backup yet.
+          </div>
+        )}
         {syncBad && (
           <div className="fixed bottom-3 left-3 z-[100] rounded bg-red-900/90 text-red-100 text-xs px-3 py-2">
             Changes are not saving to the server. Check your connection; do not clear this browser's data yet.
