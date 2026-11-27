@@ -712,6 +712,16 @@ async function gradeFrame(c: HTMLCanvasElement): Promise<Graded> {
 }
 
 /** One careful pass on the chosen frame: one mask per tooth (MobileSAM, zero-shot). Slow, so never run on live frames. */
+/** Give up on a step that takes too long, so the screen never sticks on "Reading each tooth". */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const id = setTimeout(() => reject(new Error("timeout")), ms);
+    p.then((v) => { clearTimeout(id); resolve(v); }, (e) => { clearTimeout(id); reject(e); });
+  });
+}
+const GRADE_LIMIT_MS = 25000;
+const SAM_LIMIT_MS = 100000;
+
 async function refineWithSam(g: Graded, onProgress?: (f: number) => void): Promise<Graded> {
   try {
     const c = g.c;
@@ -1182,13 +1192,28 @@ export default function Studio() {
       setBusy(true);
       setSaved(false);
       setMsg("");
-      let g = await gradeFrame(c);
-      setMsg("Reading each tooth...");
-      g = await refineWithSam(g, (f) => setMsg(`Reading each tooth... ${Math.round(f * 100)}%`));
-      setMsg("");
-      apply(g);
-      setBusy(false);
-      setStep(2);
+      try {
+        let g = await withTimeout(gradeFrame(c), GRADE_LIMIT_MS);
+        setMsg("Reading each tooth...");
+        let note = "";
+        let live = true; // late progress from a run that timed out must not overwrite the notice
+        try {
+          g = await withTimeout(refineWithSam(g, (f) => { if (live) setMsg(`Reading each tooth... ${Math.round(f * 100)}%`); }), SAM_LIMIT_MS);
+        } catch {
+          live = false;
+          // the detailed tooth reading took too long: keep the quick result, say so, and draw no design from it
+          g = { ...g, sam: null };
+          note = "The detailed tooth reading took too long, so only a quick estimate is shown and no design is drawn. Retake the photo closer and in better light, or try again.";
+        }
+        apply(g);
+        setMsg(note);
+        setStep(2);
+      } catch {
+        setMsg("This photo could not be read. Retake it, or choose a different photo. If it keeps happening, reload the page.");
+        setStep(1);
+      } finally {
+        setBusy(false);
+      }
     },
     [apply],
   );
@@ -1200,6 +1225,9 @@ export default function Studio() {
     try {
       const im = await loadImage(url);
       await process(toCanvas(im, im.naturalWidth, im.naturalHeight, 1280));
+    } catch {
+      setMsg("This file could not be opened as a photo. Choose a JPG or PNG photo, or use the camera.");
+      setBusy(false);
     } finally {
       URL.revokeObjectURL(url);
     }
@@ -1238,8 +1266,17 @@ export default function Studio() {
     setSaved(false);
     setMsg("");
     setMsg("Reading each tooth...");
-    const bestSam = await refineWithSam(best, (f) => setMsg(`Reading each tooth... ${Math.round(f * 100)}%`));
-    setMsg("");
+    let live = true;
+    let bestSam: Graded = best;
+    let note = "";
+    try {
+      bestSam = await withTimeout(refineWithSam(best, (f) => { if (live) setMsg(`Reading each tooth... ${Math.round(f * 100)}%`); }), SAM_LIMIT_MS);
+    } catch {
+      live = false;
+      bestSam = { ...best, sam: null };
+      note = "The detailed tooth reading took too long, so only a quick estimate is shown and no design is drawn. Retake the photo closer and in better light, or try again.";
+    }
+    setMsg(note);
     apply(bestSam);
     setBusy(false);
     setStep(2);
@@ -1842,6 +1879,9 @@ export default function Studio() {
         </div>
 
         {/* STEP 1 */}
+        {!busy && msg && (step === 1 || step === 2) && (
+          <p role="alert" data-testid="notice" className="text-base text-amber-200 border border-amber-300/40 rounded-xl p-3 mb-3">{msg}</p>
+        )}
         {step === 0 && (
           <section className="space-y-5">
             <h1 className="text-3xl sm:text-4xl font-bold">{t.p1Title}</h1>
