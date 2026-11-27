@@ -1142,6 +1142,7 @@ export default function Studio() {
   const [live, setLive] = useState<{ ok: boolean; text: string } | null>(null);
   const [burstMsg, setBurstMsg] = useState("");
   const [caseId, setCaseId] = useState("");
+  const runRef = useRef(0); // bumped by every new analysis and by Back, so a cancelled analysis cannot pull the user forward
   const sourceRef = useRef<"file" | "camera-single" | "camera-burst">("file");
   // merged neighbours (very wide blobs) or slivers (very flat blobs) mean the outlines are not real single teeth
   const shapesPlausible = !!engine && engine.teeth.every((t) => t.bw / t.bh <= 1.3 && t.bw / t.bh >= 0.2) && Math.max(...engine.teeth.map((t) => t.area)) <= 2.2 * engine.medianArea;
@@ -1220,8 +1221,10 @@ export default function Studio() {
       setBusy(true);
       setSaved(false);
       setMsg("");
+      const myRun = ++runRef.current;
       try {
         let g = await withTimeout(gradeFrame(c), GRADE_LIMIT_MS);
+        if (runRef.current !== myRun) return;
         setMsg("Reading each tooth...");
         let note = "";
         samEngineFailed = false;
@@ -1234,16 +1237,18 @@ export default function Studio() {
           g = { ...g, sam: null };
           note = "The detailed tooth reading took too long, so only a quick estimate is shown and no design is drawn. Retake the photo closer and in better light, or try again.";
         }
+        if (runRef.current !== myRun) return; // user went Back or started another photo: drop this result
         setEngineDown(samEngineFailed);
         if (samEngineFailed) note = "The tooth-reading engine could not start (check the connection and try again). This is not a problem with your photo, and no design is drawn.";
         apply(g);
         setMsg(note);
         setStep(2);
       } catch {
+        if (runRef.current !== myRun) return;
         setMsg("This photo could not be read. Retake it, or choose a different photo. If it keeps happening, reload the page.");
         setStep(1);
       } finally {
-        setBusy(false);
+        if (runRef.current === myRun) setBusy(false);
       }
     },
     [apply],
@@ -2352,6 +2357,8 @@ export default function Studio() {
             className={needRetake ? `${primary} flex-1` : ghost}
             disabled={step === 0}
             onClick={() => {
+              runRef.current++; // cancels any analysis still running
+              setBusy(false);
               if (step === 2) {
                 setStep(1);
                 setHasPhoto(false);
