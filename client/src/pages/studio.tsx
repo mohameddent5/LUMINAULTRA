@@ -22,6 +22,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { samTeeth, type SamTeeth } from "@/lib/samTeeth";
+import { proposeOutline, PROPOSAL_LABEL, type Proposal } from "@/lib/proposedOutline";
 import { segmentTeeth, renderTeeth, whitenInPlace, type TeethEngine, type ToothEdit, type ShapeOptions } from "@/lib/smileEngine";
 import { jpegToPdf } from "@/lib/pdf";
 import { evaluateCapture, type CaptureQuality } from "@/lib/captureQuality";
@@ -812,6 +813,7 @@ function drawGuides(
   face?: FaceGuides | null,
   lower: { x0: number; x1: number; y0: number; y1: number }[] = [],
   lips: { inner: Pt[]; outer: Pt[] } | null = null,
+  design: Proposal | null = null,
 ) {
   cv.width = o.width;
   cv.height = o.height;
@@ -992,6 +994,20 @@ function drawGuides(
       g.setLineDash([]);
     }
   }
+  if (design && design.ok) {
+    // design layer: proposed outline per upper tooth (violet, white halo)
+    for (const [col, wd] of [["rgba(255,255,255,0.9)", lw * 2.6], ["#c026d3", lw * 1.4]] as const) {
+      g.strokeStyle = col;
+      g.lineWidth = wd;
+      g.lineJoin = "round";
+      for (const tt of design.teeth) {
+        g.beginPath();
+        tt.pts.forEach((q, i) => (i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)));
+        if (tt.closed) g.closePath();
+        g.stroke();
+      }
+    }
+  }
   if (selected !== null) {
     const t = engine.teeth.find((x) => x.id === selected);
     if (t) {
@@ -1058,6 +1074,8 @@ export default function Studio() {
   const [edits, setEdits] = useState<Record<number, ToothEdit>>({});
   const [sel, setSel] = useState<number | null>(null);
   const [showGuides, setShowGuides] = useState(false);
+  const [showDetect, setShowDetect] = useState(false); // detected structure lines: advanced, off by default
+  const [designNote, setDesignNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [showFace, setShowFace] = useState(true);
   const [preset, setPreset] = useState<PresetKey | null>(null);
   const [thumbs, setThumbs] = useState<Partial<Record<PresetKey, string>>>({});
@@ -1349,8 +1367,15 @@ export default function Studio() {
     beforeShow.current.height = o.height;
     beforeShow.current.getContext("2d")!.drawImage(o, 0, 0);
     paintAfter(o, afterRef.current, region, engine, { level, smooth, straighten, balance, enamel, edits });
-    if (guideRef.current) drawGuides(guideRef.current, o, region, engine, showGuides, sel, showFace ? analysis?.face : null, lowerBoxes, analysis && !analysis.close && analysis.outerLip ? { inner: analysis.polygon, outer: analysis.outerLip } : null);
-  }, [step, region, level, hasPhoto, engine, smooth, straighten, balance, enamel, edits, showGuides, sel, showFace, analysis, lowerBoxes]);
+    let design: Proposal | null = null;
+    if (engine && region && showGuides) {
+      const upT = engine.teeth.filter((t) => t.incisalDown);
+      design = proposeOutline(upT, region, gumVisibleShare(o, region, upT) >= 0.5, true);
+    } else if (engine && region) design = { ok: false, reason: "The photo checks did not pass, so no design is drawn." };
+    const dn = design ? (design.ok ? { ok: true, text: design.notes.join(" ") } : { ok: false, text: design.reason }) : null;
+    setDesignNote((p) => (p && dn && p.ok === dn.ok && p.text === dn.text ? p : dn));
+    if (guideRef.current) drawGuides(guideRef.current, o, region, engine, showDetect, sel, showFace ? analysis?.face : null, lowerBoxes, analysis && !analysis.close && analysis.outerLip ? { inner: analysis.polygon, outer: analysis.outerLip } : null, design);
+  }, [step, region, level, hasPhoto, engine, smooth, straighten, balance, enamel, edits, showGuides, sel, showFace, analysis, lowerBoxes, showDetect]);
 
   /* option previews (whitening / bonding / veneers style) */
   useEffect(() => {
@@ -1984,6 +2009,17 @@ export default function Studio() {
               </div>
             </div>
             <p className={`text-base ${muted}`}>{t.drag}</p>
+            {designNote && (
+              <p role="status" className={`text-base ${designNote.ok ? "text-fuchsia-200" : "text-amber-200"}`}>
+                {designNote.ok ? `${PROPOSAL_LABEL} ${designNote.text}` : `No design drawn: ${designNote.text}`}
+              </p>
+            )}
+            {engine && (
+              <label className={`flex items-center gap-2 text-base ${muted}`}>
+                <input type="checkbox" checked={showDetect} onChange={(e) => setShowDetect(e.target.checked)} />
+                Detected structure (advanced)
+              </label>
+            )}
 
             {step === 2 && (
               <>
