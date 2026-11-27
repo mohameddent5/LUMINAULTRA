@@ -659,6 +659,8 @@ type Graded = {
   quality: CaptureQuality;
   teethPx: number;
   sam?: SamTeeth | null;
+  /** lower-arch tooth boxes in full canvas px (analysis from the SAM pass) */
+  lower?: { x0: number; x1: number; y0: number; y1: number }[];
 };
 
 function regrade(c: HTMLCanvasElement, analysis: Analysis, region: Region | null, inst?: Int32Array): Graded {
@@ -735,7 +737,8 @@ async function refineWithSam(g: Graded, onProgress?: (f: number) => void): Promi
       }
     }
     const r = regrade(c, g.analysis, region, inst);
-    return r.engine ? { ...r, sam } : { ...g, sam: null };
+    const lower = sam.lowerBoxes.map((b) => ({ x0: b.x0 / k, x1: b.x1 / k, y0: b.y0 / k, y1: b.y1 / k }));
+    return r.engine ? { ...r, sam, lower } : { ...g, sam: null };
   } catch (e) {
     console.warn("SAM unavailable:", e);
     return { ...g, sam: null };
@@ -802,6 +805,7 @@ function drawGuides(
   showGuides: boolean,
   selected: number | null,
   face?: FaceGuides | null,
+  lower: { x0: number; x1: number; y0: number; y1: number }[] = [],
 ) {
   cv.width = o.width;
   cv.height = o.height;
@@ -929,6 +933,29 @@ function drawGuides(
       }
       }
     }
+    // lower arch (analysis only): tooth edges from the lower-row boxes, drawn in the same legend. Edges within 6 px are merged. Incisal edge is the top of the box.
+    if (lower.length >= 3 && upAll.length >= 3) {
+      const xs = lower.flatMap((b) => [b.x0, b.x1]).sort((a, b) => a - b);
+      const merged: number[] = [];
+      let grp: number[] = [];
+      for (const x of xs) {
+        if (grp.length && x - grp[grp.length - 1] > 6) { merged.push(grp.reduce((a, b) => a + b, 0) / grp.length); grp = []; }
+        grp.push(x);
+      }
+      if (grp.length) merged.push(grp.reduce((a, b) => a + b, 0) / grp.length);
+      const ytop = lower.reduce((a, b) => a + b.y0, 0) / lower.length, ybot = lower.reduce((a, b) => a + b.y1, 0) / lower.length;
+      g.lineWidth = lw;
+      for (const b of lower) {
+        const mesialLeft = (b.x0 + b.x1) / 2 > midX + region.x0;
+        g.strokeStyle = mesialLeft ? "#22c55e" : "#facc15";
+        g.beginPath(); g.moveTo(b.x0, b.y0 + (b.y1 - b.y0) * 0.1); g.lineTo(b.x0, b.y1 - (b.y1 - b.y0) * 0.15); g.stroke();
+        g.strokeStyle = mesialLeft ? "#facc15" : "#22c55e";
+        g.beginPath(); g.moveTo(b.x1, b.y0 + (b.y1 - b.y0) * 0.1); g.lineTo(b.x1, b.y1 - (b.y1 - b.y0) * 0.15); g.stroke();
+        g.strokeStyle = "#000000";
+        g.beginPath(); g.moveTo(b.x0, b.y0); g.lineTo(b.x1, b.y0); g.stroke();
+      }
+      void merged; void ytop; void ybot;
+    }
     // dental midline between the two most central teeth
     const all = [...engine.teeth].sort((a, b) => a.cx - b.cx);
     if (all.length >= 2) {
@@ -1005,6 +1032,7 @@ export default function Studio() {
   const [msg, setMsg] = useState("");
   const [hasPhoto, setHasPhoto] = useState(false);
   const [engine, setEngine] = useState<TeethEngine | null>(null);
+  const [lowerBoxes, setLowerBoxes] = useState<{ x0: number; x1: number; y0: number; y1: number }[]>([]);
   const [quality, setQuality] = useState<CaptureQuality | null>(null);
   const [smooth, setSmooth] = useState(false);
   const [straighten, setStraighten] = useState(false);
@@ -1080,6 +1108,7 @@ export default function Studio() {
     setAnalysis(g.analysis);
     setRegion(g.region);
     setEngine(g.engine);
+    setLowerBoxes(g.lower ?? []);
     setQuality(g.quality);
     setSmooth(false);
     setStraighten(false);
@@ -1116,7 +1145,7 @@ export default function Studio() {
     const url = URL.createObjectURL(f);
     try {
       const im = await loadImage(url);
-      await process(toCanvas(im, im.naturalWidth, im.naturalHeight));
+      await process(toCanvas(im, im.naturalWidth, im.naturalHeight, 1280));
     } finally {
       URL.revokeObjectURL(url);
     }
@@ -1126,7 +1155,7 @@ export default function Studio() {
     const v = videoRef.current;
     if (!v || !v.videoWidth) return;
     sourceRef.current = "camera-single";
-    const c = toCanvas(v, v.videoWidth, v.videoHeight);
+    const c = toCanvas(v, v.videoWidth, v.videoHeight, 1280);
     stopCamera();
     await process(c);
   };
@@ -1303,8 +1332,8 @@ export default function Studio() {
     beforeShow.current.height = o.height;
     beforeShow.current.getContext("2d")!.drawImage(o, 0, 0);
     paintAfter(o, afterRef.current, region, engine, { level, smooth, straighten, balance, enamel, edits });
-    if (guideRef.current) drawGuides(guideRef.current, o, region, engine, showGuides, sel, showFace ? analysis?.face : null);
-  }, [step, region, level, hasPhoto, engine, smooth, straighten, balance, enamel, edits, showGuides, sel, showFace, analysis]);
+    if (guideRef.current) drawGuides(guideRef.current, o, region, engine, showGuides, sel, showFace ? analysis?.face : null, lowerBoxes);
+  }, [step, region, level, hasPhoto, engine, smooth, straighten, balance, enamel, edits, showGuides, sel, showFace, analysis, lowerBoxes]);
 
   /* option previews (whitening / bonding / veneers style) */
   useEffect(() => {
