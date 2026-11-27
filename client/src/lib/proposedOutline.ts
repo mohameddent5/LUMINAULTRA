@@ -29,6 +29,8 @@ export const PROPOSAL_LABEL = "Proposed design: a starting point for the dentist
 
 const LABELS = ["central", "lateral", "canine"];
 
+const CERVICAL_BIAS = 0.066;
+
 export function proposeOutline(upper: Tooth[], region: { x0: number; y0: number }, gumSeen: boolean, tierOk: boolean, lip: Pt[] | null = null): Proposal {
   if (!tierOk) return { ok: false, reason: "The photo checks did not pass, so no design is drawn." };
   const up = [...upper].sort((a, b) => a.cx - b.cx);
@@ -89,7 +91,9 @@ export function proposeOutline(upper: Tooth[], region: { x0: number; y0: number 
       const xl = Math.min(xa, xb), xr = Math.max(xa, xb);
       const yb = lipGap !== null ? (lipEdge[i] as number) - lipGap : pairY(i); // incisal edge: follows the lower lip when a face was found, else left/right pair averaged (symmetry)
       const det = pair[i];
-      const topDetected = (left[i].by + right[i].by) / 2;
+      // detected mask tops sit above his hand-drawn cervical line by a median 6.6% of tooth height (29 teeth, 5 photos, ex17 to ex21, leave-one-photo-out improved 4 of 4 design-eligible photos); move the detected top down by that share
+      const rawTop = (left[i].by + right[i].by) / 2;
+      const topDetected = gumSeen ? rawTop + CERVICAL_BIAS * (yb - rawTop) : rawTop;
       // without visible gum the tooth top is hidden: keep the visible top. With gum, top = height from the width/length target (not above the detected top)
       const yt = gumSeen ? Math.max(yb - w / WIDTH_LENGTH, topDetected) : topDetected;
       const r = Math.min(w * 0.22, (yb - yt) * 0.4);
