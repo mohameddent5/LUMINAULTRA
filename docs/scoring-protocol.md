@@ -1,5 +1,6 @@
 # Scoring protocol (dev set, private labels)
 
+- Scoring width: SCORE_W env (default 1280, never upscaled), the app passes the photo at up to 1280 px. Results changed with width: at 1000 px ex3, ex9 and ex10 were refused.
 - Borders: a truth border counts as hit if any found border is within 14 px (1280 px wide frame).
 - Report per photo: truth count, found count, hits, recall, precision, median border error (px), teeth found, lower boxes.
 - Pooled numbers always state the number of photos.
