@@ -1,4 +1,5 @@
 import { lesionFlags } from "@/lib/lesionFlags";
+import { INTENDED_USE } from "@/lib/intendedUse";
 import { PeakTracker, measureFrame } from "@/lib/peakGum";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
@@ -1947,7 +1948,7 @@ export default function Studio() {
                     <p className={`text-base ${muted}`}>{tier === "A" ? t.tierA : tier === "B" ? t.tierB : t.tierC}</p>
                     {lesionFlags(engine).length > 0 && (
                       <p className={`text-base ${muted}`} data-testid="flag-caries">
-                        Possible caries on {lesionFlags(engine).length} {lesionFlags(engine).length > 1 ? "teeth" : "tooth"} (dark or brown patches). Verify clinically. Colour only: stain, calculus or a dark filling look the same.
+                        Possible caries on {lesionFlags(engine).length} {lesionFlags(engine).length > 1 ? "teeth" : "tooth"} (dark or brown patches). Not a diagnosis. Verify clinically. Colour only: stain, calculus or a dark filling look the same.
                       </p>
                     )}
                     {quality.acceptable && tier === "C" ? (
@@ -2112,6 +2113,10 @@ export default function Studio() {
                   {msg}
                 </p>
                 <p className={`text-base ${muted}`}>{t.disclaimer}</p>
+                <details className={`text-sm ${muted}`}>
+                  <summary className="cursor-pointer underline underline-offset-2">Intended use and limits</summary>
+                  <p className="mt-2 leading-relaxed">{INTENDED_USE}</p>
+                </details>
                 <button className={ghost} onClick={reset}>
                   <UserRound className="w-5 h-5" aria-hidden />
                   {t.newPatient}
