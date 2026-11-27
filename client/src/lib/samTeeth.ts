@@ -323,7 +323,7 @@ export async function samTeeth(
   }
   const boxes = teeth.map((t) => ({ x0: rx + t.x0 / (sc * Q), x1: rx + t.x1 / (sc * Q), y0: ry + t.y0 / (sc * Q), y1: ry + t.y1 / (sc * Q) }));
   const ext = boxes.flatMap((b) => [b.x0, b.x1]).sort((a, b) => a - b);
-  const tol = 14 * (rw / 1280);
+  const tol = 6 * (rw / 1280);
   const groups: number[][] = [];
   for (const x of ext) {
     if (groups.length && x - groups[groups.length - 1][groups[groups.length - 1].length - 1] <= tol) groups[groups.length - 1].push(x);
