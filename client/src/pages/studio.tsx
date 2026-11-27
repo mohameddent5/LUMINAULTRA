@@ -1043,6 +1043,18 @@ function tierOf(q: CaptureQuality | null, e: TeethEngine | null, closeUp = false
   return "B";
 }
 
+/** Teeth to mark "check": every tooth when braces are suspected, else the colour-flagged ones. Empty when the photo is plain. */
+function checkTeeth(e: TeethEngine | null): number[] {
+  if (!e) return [];
+  if (bracesSuspected(e)) return e.teeth.map((t) => t.id);
+  const fl = lesionFlags(e);
+  return fl.length >= 3 || fl.some((f) => f.level === "marked") ? fl.map((f) => f.id) : [];
+}
+/** Photo checks passed (sharp, lit, teeth visible) but braces or decay flags made it tier C: draw the design with a CHECK banner instead of refusing. */
+function checkMode(q: CaptureQuality | null, e: TeethEngine | null): boolean {
+  return !!q && q.acceptable && checkTeeth(e).length > 0;
+}
+
 const RETAKE_TIPS: Record<Lang, Record<string, string>> = {
   en: {
     resolution: "The photo is too small to see the teeth. Use the phone's back camera and hold it about an arm's length away, so the whole smile fills the frame.",
@@ -1180,7 +1192,7 @@ export default function Studio() {
     setEnamel(false);
     setEdits({});
     setSel(null);
-    setShowGuides(!!g.sam && tierOf(g.quality, g.engine, !!g.analysis.close) !== "C"); // no lines on a frame the checks rejected
+    setShowGuides(!!g.sam && (tierOf(g.quality, g.engine, !!g.analysis.close) !== "C" || checkMode(g.quality, g.engine))); // no lines on a frame the checks rejected
     setPreset("whiten");
     setPhotoVersion((v) => v + 1);
     setCaseId("");
@@ -1429,12 +1441,23 @@ export default function Studio() {
       design = !shapeOk
         ? { ok: false, reason: "The teeth are not clear and separate enough to draw a design honestly (damaged, merged or crowded outlines). No design is drawn." }
         : proposeOutline(upT, region, gumVisibleShare(o, region, upT) >= 0.5, true, analysis && !analysis.close && analysis.outerLip ? analysis.polygon : null);
+      if (design.ok && checkMode(quality, engine)) design = { ...design, notes: ["CHECK: braces or possible decay were flagged on this photo, so outlines on the marked teeth are less reliable. Verify each marked tooth clinically before using the design.", ...design.notes] };
       if (design.ok && analysis?.close) design = { ...design, notes: ["No face in frame: the facial midline and lips were not checked, so the dental midline is used as the reference.", ...design.notes] };
     } else if (engine && region) design = { ok: false, reason: "The photo checks did not pass, so no design is drawn." };
     const dn = design ? (design.ok ? { ok: true, text: design.notes.join(" ") } : { ok: false, text: design.reason }) : null;
     setDesignNote((p) => (p && dn && p.ok === dn.ok && p.text === dn.text ? p : dn));
     if (guideRef.current) drawGuides(guideRef.current, o, region, engine, showDetect, sel, showFace ? analysis?.face : null, lowerBoxes, analysis && !analysis.close && analysis.outerLip ? { inner: analysis.polygon, outer: analysis.outerLip } : null, design);
-  }, [step, region, level, hasPhoto, engine, smooth, straighten, balance, enamel, edits, showGuides, sel, showFace, analysis, lowerBoxes, showDetect, shapeOk]);
+    if (guideRef.current && engine && region && design && design.ok && checkMode(quality, engine)) {
+      const g2 = guideRef.current.getContext("2d");
+      const ids = new Set(checkTeeth(engine));
+      if (g2) {
+        g2.font = `bold ${Math.max(12, Math.round(o.width / 70))}px sans-serif`;
+        g2.fillStyle = "#facc15";
+        g2.textAlign = "center";
+        for (const t of engine.teeth) if (ids.has(t.id)) g2.fillText("check", t.bx + region.x0 + t.bw / 2, t.by + region.y0 - 4);
+      }
+    }
+  }, [step, region, level, hasPhoto, engine, smooth, straighten, balance, enamel, edits, showGuides, sel, showFace, analysis, lowerBoxes, showDetect, shapeOk, quality]);
 
   /* option previews (whitening / bonding / veneers style) */
   useEffect(() => {
@@ -2117,9 +2140,9 @@ export default function Studio() {
                       </p>
                     )}
                     {bracesSuspected(engine) ? (
-                      <p className={`text-base ${muted}`} data-testid="flag-braces">Braces or brackets look present on the teeth. The shape tools and the colour flags assume plain enamel, so no design is drawn and no decay flags are shown. This is a refusal, not a finding.</p>
+                      <p className={`text-base ${muted}`} data-testid="flag-braces">Braces or brackets look present on the teeth. The colour flags assume plain enamel, so no decay flags are shown. Any design is marked CHECK and is less reliable on brackets. This is a caution, not a finding.</p>
                     ) : quality.acceptable && tier === "C" ? (
-                      <p className={`text-base ${muted}`}>The photo itself is fine, but dark patches suggest decay or damage. Design lines are hidden because the shape tools assume sound teeth.</p>
+                      <p className={`text-base ${muted}`}>The photo itself is fine, but dark patches suggest decay or damage. Any design is marked CHECK on those teeth because the shape tools assume sound crowns.</p>
                     ) : quality.acceptable ? (
                       <p className={`text-base ${muted}`}>{t.relGoodWhy}</p>
                     ) : (
