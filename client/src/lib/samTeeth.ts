@@ -421,7 +421,7 @@ export async function samTeethRobust(canvas: HTMLCanvasElement, roi?: SamBox | n
   if (!roi) {
     const a = autoToothRoi(canvas);
     if (a) {
-      for (const f of [1, 0.8, 1.25]) {
+      for (const f of [1]) { // one attempt only: each finder run costs 10 to 15 s, so fallbacks are capped at 3 extra runs
         const r = await samTeeth(f === 1 ? canvas : scaled(f), { x: a.x * f, y: a.y * f, w: a.w * f, h: a.h * f });
         if (r && r.count >= MIN_FALLBACK_TEETH) return { ...r, scale: f };
       }
