@@ -187,6 +187,16 @@ export async function samTeeth(
   const big = pool.reduce((a, b) => (b.area > a.area ? b : a));
   const bigH = big.y1 - big.y0 + 1;
   let teeth = pool.filter((k) => Math.abs(k.cy - big.cy) < 0.55 * bigH).sort((a, b) => (a.x0 + a.x1) - (b.x0 + b.x1));
+  // a deep bite or crowding puts lower incisors in the same height band as upper side teeth: teeth that start well below the top of the largest tooth belong to the lower arch
+  const rowLow: Cand[] = [];
+  {
+    const top = big.y0 + 0.45 * bigH;
+    const up = teeth.filter((t) => t.y0 <= top);
+    if (up.length >= 3 && up.length < teeth.length) {
+      for (const t of teeth) if (t.y0 > top) rowLow.push(t);
+      teeth = up;
+    }
+  }
   if (teeth.length < 3) return null;
   // outer teeth are narrow and shadowed, so the coarse grid often misses them: probe outward along the row
   {
@@ -256,8 +266,8 @@ export async function samTeeth(
   }
   const borders = groups.map((g) => g.reduce((a, b) => a + b, 0) / g.length);
   const upBottom = teeth.reduce((a, t) => a + t.y1, 0) / teeth.length;
-  const lowerBoxes = keep
-    .filter((k) => okShape(k) && k.lum > lt * 0.8 && k.red < rt * 1.2 && !teeth.includes(k) && k.cy > upBottom - 0.1 * bigH && k.y0 > upBottom - 0.35 * bigH)
+  const lowerBoxes = [...rowLow, ...keep]
+    .filter((k, i, arr) => arr.indexOf(k) === i && okShape(k) && k.lum > lt * 0.8 && k.red < rt * 1.2 && !teeth.includes(k) && k.cy > upBottom - 0.1 * bigH && k.y0 > upBottom - 0.35 * bigH)
     .map((t) => ({ x0: rx + t.x0 / (sc * Q), x1: rx + t.x1 / (sc * Q), y0: ry + t.y0 / (sc * Q), y1: ry + t.y1 / (sc * Q) }))
     .sort((a, b) => a.x0 - b.x0);
   return { labels, w: canvas.width, h: canvas.height, count: teeth.length, boxes, lowerBoxes, borders, ms: performance.now() - t0 };
