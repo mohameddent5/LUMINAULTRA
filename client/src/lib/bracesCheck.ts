@@ -24,9 +24,28 @@ export function tooth_hardware(t: TeethEngine["teeth"][number]): number {
   return n < 80 ? 0 : hw / n;
 }
 
+/** Blue-cast share of the non-mask pixels inside a tooth's box (elastics and brackets show up as holes in the mask). */
+export function box_blue(e: TeethEngine, t: TeethEngine["teeth"][number]): number {
+  const er = e.erased;
+  let n = 0;
+  let b = 0;
+  for (let y = 0; y < t.bh; y++) {
+    for (let x = 0; x < t.bw; x++) {
+      if (t.own.data[(y * t.bw + x) * 4 + 3] > 0) continue;
+      const X = t.bx + x, Y = t.by + y;
+      if (X < 0 || Y < 0 || X >= er.width || Y >= er.height) continue;
+      const i = (Y * er.width + X) * 4;
+      n++;
+      if (er.data[i + 2] > er.data[i] + 30 && er.data[i + 2] > er.data[i + 1] + 10) b++;
+    }
+  }
+  return n < 80 ? 0 : b / n;
+}
+
 export function bracesSuspected(e: TeethEngine | null): boolean {
   if (!e || e.teeth.length < 3) return false;
   const shares = e.teeth.map(tooth_hardware);
   const hit = shares.filter((s) => s >= 0.08).length;
-  return hit >= 3 && hit / shares.length >= 0.4;
+  const blue = e.teeth.map((t) => box_blue(e, t)).filter((x) => x >= 0.07).length;
+  return (hit >= 3 && hit / shares.length >= 0.4) || (blue >= 3 && blue / shares.length >= 0.4);
 }
