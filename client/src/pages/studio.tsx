@@ -86,7 +86,7 @@ const T = {
     natural_depthHint: "Translucent edges, warmer necks",
     guides: "Show guides",
     guidesHint: "Midline and edge curve",
-    guideLegend: "Cyan dashed: dental midline. White: smooth edge curve. Yellow: current edge line. Pink dots: gum line.",
+    guideLegend: "Cyan dashed: dental midline. White: smooth edge curve. Yellow: current edge line. Black: incisal edge. Green: mesial side. Yellow dots: distal side. Light blue: cervical edge (only where gum shows). Pink dots: gum line (only where gum shows).",
     tapTeeth: "Tap a tooth to adjust it.",
     editTitle: "Adjust this tooth",
     longer: "Longer",
@@ -211,7 +211,7 @@ const T = {
     natural_depthHint: "Translucent edges, warmer necks",
     guides: "Show guides",
     guidesHint: "Midline and edge curve",
-    guideLegend: "Cyan dashed: dental midline. White: smooth edge curve. Yellow: current edge line. Pink dots: gum line.",
+    guideLegend: "Cyan dashed: dental midline. White: smooth edge curve. Yellow: current edge line. Black: incisal edge. Green: mesial side. Yellow dots: distal side. Light blue: cervical edge (only where gum shows). Pink dots: gum line (only where gum shows).",
     tapTeeth: "Tap a tooth to adjust it.",
     editTitle: "Adjust this tooth",
     longer: "Longer",
@@ -826,14 +826,26 @@ function drawGuides(
     // one outline per tooth, plus each upper tooth's width as a share of the widest one
     const upAll = engine.teeth.filter((t) => t.incisalDown).sort((a, b) => a.cx - b.cx);
     const widest = Math.max(1, ...upAll.map((t) => t.bw));
-    g.fillStyle = "rgba(56,189,248,0.95)";
+    // legend: black incisal edge, green mesial side (towards the midline), yellow distal side, light blue cervical edge (only where gum is visible)
+    const midX = upAll.length ? upAll.map((t) => t.cx).sort((a, b) => a - b)[Math.floor(upAll.length / 2)] : 0;
+    const gumSeen = gumVisibleShare(o, region, upAll) >= 0.5;
     for (const t of engine.teeth) {
       const W = t.own.width, H = t.own.height, a = t.own.data;
       for (let y = 0; y < H; y++)
         for (let x = 0; x < W; x++) {
           if (a[(y * W + x) * 4 + 3] < 128) continue;
           const edge = x === 0 || y === 0 || x === W - 1 || y === H - 1 || a[(y * W + x - 1) * 4 + 3] < 128 || a[(y * W + x + 1) * 4 + 3] < 128 || a[((y - 1) * W + x) * 4 + 3] < 128 || a[((y + 1) * W + x) * 4 + 3] < 128;
-          if (edge) g.fillRect(t.bx + x + region.x0, t.by + y + region.y0, Math.max(1, lw * 0.7), Math.max(1, lw * 0.7));
+          if (!edge) continue;
+          const fy = y / H, fx = x / W;
+          const incisal = t.incisalDown ? fy > 0.86 : fy < 0.14;
+          const cervical = t.incisalDown ? fy < 0.16 : fy > 0.84;
+          if (cervical && !gumSeen) continue;
+          const mesialRight = t.cx < midX;
+          const mesial = fx > 0.5 === mesialRight;
+          g.fillStyle = incisal ? "#000000" : cervical ? "#7dd3fc" : mesial ? "#22c55e" : "#facc15";
+          const sz = Math.max(1, lw * 0.9);
+          if (incisal) { g.fillStyle = "rgba(255,255,255,0.8)"; g.fillRect(t.bx + x + region.x0 - 1, t.by + y + region.y0 - 1, sz + 2, sz + 2); g.fillStyle = "#000000"; }
+          g.fillRect(t.bx + x + region.x0, t.by + y + region.y0, sz, sz);
         }
     }
     g.font = `600 ${Math.max(11, Math.round(o.width / 55))}px sans-serif`;
