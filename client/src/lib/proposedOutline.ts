@@ -33,7 +33,12 @@ const LABELS = ["central", "lateral", "canine"];
 // and 10.4% / 13.9% on held-out independent subjects ex26 (n=6) / ex27 (n=8). Per-photo median abs error 6.6% -> 8.5%:
 // ex18 .049>.035, ex19 .046>.037, ex20 .037=.037, ex21 .038=.038, ex26 .039>.030, ex27 .074>.055 (no photo worse).
 // 8.5% is a pooled-data value, NOT a literature value; no cited paper gives this offset for a mask top. Labels are +-2 px (about 5%) noise.
-const CERVICAL_BIAS = 0.085;
+const CERVICAL_BIAS = 0.085; // pooled value, kept for reference
+// Per-position bias (share of tooth height the detected mask top sits above his cyan line), from his strokes on ex18-21, ex26, ex27:
+// central median 0.051 (n=11, IQR .03-.08), lateral 0.096 (n=10, IQR .08-.12), canine 0.14 (n=10, IQR .11-.16). Used: 0.05 / 0.095 / 0.14.
+// Per-photo median abs error uniform 0.085 -> per-position: ex18 .035>.025, ex20 .025>.020, ex21 .040>.025, ex26 .035>.015, ex27 .055>.020,
+// ex19 .035 -> .065 (WORSE, braces photo that is refused anyway, one 0.71 mask outlier). Dev data, no held-out photo left for this change.
+const CERVICAL_BIAS_POS = [0.05, 0.095, 0.14];
 // Zenith distal offset as a share of tooth width, central / lateral / canine. Follows the literature per Mohamed's decision (Telegram 26050818).
 // Chu 2009 (PMID 19368601): central 1 mm of a typical 8.6 mm central = 0.116; lateral 0.4 mm of 6.45 mm = 0.062; canine 97.5% centralized = 0.
 // His own labels put the zenith at the centre (about 0.00 to 0.03, n=14, ex26/ex27); recorded as a disagreement in docs/priors-and-methods.md.
@@ -108,9 +113,9 @@ export function proposeOutline(upper: Tooth[], region: { x0: number; y0: number 
       if (!traced) nRatio++;
       // incisal edge: lip curve or symmetrised pair for traced teeth; ratio-filled teeth borrow the mean edge of the traced ones
       const yb = traced || ybRatio === null ? ybOwn(i) : ybRatio;
-      // detected mask tops sit above his hand-drawn cervical line by a median 8.5% of tooth height (see CERVICAL_BIAS); move the detected top down by that share
+      // detected mask tops sit above his hand-drawn cervical line by 5% / 9.5% / 14% of tooth height for central / lateral / canine (see CERVICAL_BIAS_POS); move the detected top down by that share
       const rawTop = (left[i].by + right[i].by) / 2;
-      const topDetected = gumSeen ? rawTop + CERVICAL_BIAS * (yb - rawTop) : rawTop;
+      const topDetected = gumSeen ? rawTop + CERVICAL_BIAS_POS[i] * (yb - rawTop) : rawTop;
       // without visible gum the tooth top is hidden: keep the visible top. With gum, top = height from the width/length target (not above the detected top)
       const yt = gumSeen ? Math.max(yb - w / WIDTH_LENGTH, topDetected) : topDetected;
       const h = yb - yt;
