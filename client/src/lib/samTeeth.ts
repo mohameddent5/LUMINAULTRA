@@ -198,6 +198,43 @@ export async function samTeeth(
     }
   }
   if (teeth.length < 3) return null;
+  // a failed wide mask often holds one real tooth plus gum or a neighbour: keep only its bright, non-claimed pixels and take the biggest solid blob
+  const refineResidual = (k0: Cand, taken: Cand[]): Cand | null => {
+    const thr = 0.88 * k0.lum;
+    let r = new Uint8Array(n);
+    for (let i = 0; i < n; i++) if (k0.m[i] && lum[i] >= thr && !taken.some((t) => t.m[i])) r[i] = 1;
+    const erode = (a: Uint8Array) => { const o2 = new Uint8Array(n); for (let y = 1; y < oh - 1; y++) for (let x = 1; x < ow - 1; x++) { const i = y * ow + x; if (a[i] && a[i - 1] && a[i + 1] && a[i - ow] && a[i + ow]) o2[i] = 1; } return o2; };
+    const dil = (a: Uint8Array) => { const o2 = new Uint8Array(n); for (let y = 1; y < oh - 1; y++) for (let x = 1; x < ow - 1; x++) { const i = y * ow + x; if (a[i] || a[i - 1] || a[i + 1] || a[i - ow] || a[i + ow]) o2[i] = 1; } return o2; };
+    for (let it = 0; it < 3; it++) r = erode(r);
+    for (let it = 0; it < 3; it++) r = dil(r);
+    // biggest connected blob
+    const lab = new Int32Array(n);
+    let best = 0, bestId = 0, id = 0;
+    for (let i0 = 0; i0 < n; i0++) {
+      if (!r[i0] || lab[i0]) continue;
+      id++;
+      let cnt = 0;
+      const st = [i0];
+      lab[i0] = id;
+      while (st.length) {
+        const i = st.pop()!;
+        cnt++;
+        const x = i % ow;
+        for (const j of [i - 1, i + 1, i - ow, i + ow]) {
+          if (j < 0 || j >= n || !r[j] || lab[j]) continue;
+          if ((j === i - 1 && x === 0) || (j === i + 1 && x === ow - 1)) continue;
+          lab[j] = id;
+          st.push(j);
+        }
+      }
+      if (cnt > best) { best = cnt; bestId = id; }
+    }
+    if (best < 75) return null;
+    const m2 = new Uint8Array(n);
+    let area = 0, x0 = ow, x1 = 0, y0 = oh, y1 = 0, sy = 0, sl = 0, sr = 0;
+    for (let y = 0; y < oh; y++) for (let x = 0; x < ow; x++) { const i = y * ow + x; if (lab[i] === bestId) { m2[i] = 1; area++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; sy += y; sl += lum[i]; sr += red[i]; } }
+    return { m: m2, iou: k0.iou, area, x0, x1, y0, y1, cy: sy / area, lum: sl / area, red: sr / area };
+  };
   // two neighbouring teeth are often returned as one merged mask: ask again for the gap between accepted teeth, telling the model which teeth are NOT wanted
   {
     const rowY0 = teeth.reduce((a, t) => a + t.cy, 0) / teeth.length;
@@ -210,7 +247,9 @@ export async function samTeeth(
         const pi = Math.min(oh - 1, Math.floor((rowY0 / oh) * oh)) * ow + Math.min(ow - 1, Math.floor(pxx));
         if (lum[pi] < lt * 0.9 || red[pi] > rt) continue;
         const negs = [...teeth].sort((a, b) => Math.abs((a.x0 + a.x1) / 2 - pxx) - Math.abs((b.x0 + b.x1) / 2 - pxx)).slice(0, 3).map((t) => ({ x: (t.x0 + t.x1) / 2 / ow, y: t.cy / oh }));
-        const k = await decodeAt(fx, rowY0 / oh, 0.7, negs);
+        const k0 = await decodeAt(fx, rowY0 / oh, 0.7, negs);
+        let k = k0;
+        if (k0 && !okShape(k0)) k = refineResidual(k0, teeth);
         if (!k || !okShape(k) || !(k.lum > lt && k.red < rt)) continue;
         if (Math.abs(k.cy - big.cy) >= 0.55 * bigH) continue;
         const kw = k.x1 - k.x0 + 1;
