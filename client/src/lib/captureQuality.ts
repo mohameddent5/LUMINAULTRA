@@ -28,6 +28,8 @@ export interface CaptureSample {
   mouthPoints?: readonly MouthPoint[];
   /** Tooth keypoints the dental network accepted on this frame. */
   teethCount: number;
+  /** Same frame scaled to a fixed width, so sharpness does not depend on the photo's pixel size. */
+  sharpLuma?: { luma: ArrayLike<number>; width: number; height: number };
 }
 
 export type CaptureSignalId = "sharpness" | "exposure" | "resolution" | "mouthVisibility";
@@ -54,8 +56,9 @@ export interface CaptureQuality {
 
 /** Engineering limits. Conservative by design. */
 export const CAPTURE_LIMITS = {
-  /** Variance of the 4-neighbour Laplacian below this is treated as soft. */
-  minLaplacianVariance: 60,
+  /** Variance of the 4-neighbour Laplacian, measured on the frame scaled to 640 px wide, below this is treated as soft.
+   * 25 sits just under the lowest value among the user's own usable labeled photos (32); it is not validated as a blur detector (no labeled blurry photos yet). */
+  minLaplacianVariance: 25,
   /** Fraction of pixels at the top of the range before highlights are clipped. */
   maxClippedHigh: 0.02,
   /** Fraction of pixels at the bottom before shadows are crushed. */
@@ -169,7 +172,7 @@ export function mouthWidthRatio(
 export function evaluateCapture(sample: CaptureSample): CaptureQuality {
   const { luma, width, height, mouthPoints, teethCount } = sample;
 
-  const sharp = laplacianVariance(luma, width, height);
+  const sharp = sample.sharpLuma ? laplacianVariance(sample.sharpLuma.luma, sample.sharpLuma.width, sample.sharpLuma.height) : laplacianVariance(luma, width, height);
   const sharpOk = sharp >= CAPTURE_LIMITS.minLaplacianVariance;
 
   const exposure = exposureStats(luma, Math.floor(width) * Math.floor(height));

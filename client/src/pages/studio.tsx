@@ -674,7 +674,15 @@ function regrade(c: HTMLCanvasElement, analysis: Analysis, region: Region | null
   } else if (!analysis.close) {
     pts = analysis.polygon.map((p) => ({ x: p.x / c.width, y: p.y / c.height }));
   }
+  const kS = 640 / c.width;
+  const sc640 = document.createElement("canvas");
+  sc640.width = 640;
+  sc640.height = Math.max(8, Math.round(c.height * kS));
+  const sctx = sc640.getContext("2d", { willReadFrequently: true })!;
+  sctx.imageSmoothingQuality = "high";
+  sctx.drawImage(c, 0, 0, sc640.width, sc640.height);
   const quality = evaluateCapture({
+    sharpLuma: { luma: lumaOf(sc640), width: sc640.width, height: sc640.height },
     luma: lumaOf(c),
     width: c.width,
     height: c.height,
