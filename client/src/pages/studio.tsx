@@ -290,6 +290,8 @@ const MP_WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wa
 const MP_MODEL =
   "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 // Inner lip loop, in order.
+// MediaPipe face mesh outer lip ring (upper lip left to right, then lower lip right to left)
+const OUTER_LIP = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146];
 const INNER_LIP = [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95];
 
 let landmarkerPromise: Promise<any> | null = null;
@@ -319,6 +321,8 @@ type Analysis = {
   seed?: Pt;
   tiltDeg: number | null;
   face?: FaceGuides;
+  /** outer lip ring from the face mesh (only when a whole face was found) */
+  outerLip?: Pt[];
 };
 
 /** Lines worked out automatically from the 478 face landmarks. All in canvas pixels. */
@@ -377,7 +381,8 @@ async function findSmile(canvas: HTMLCanvasElement): Promise<Analysis> {
       const a = f[33];
       const b = f[263];
       const tilt = (Math.atan2((b.y - a.y) * h, (b.x - a.x) * w) * 180) / Math.PI;
-      return { polygon, auto: true, tiltDeg: tilt, face: faceGuides(f, w, h) };
+      const outerLip = OUTER_LIP.map((i) => ({ x: f[i].x * w, y: f[i].y * h }));
+      return { polygon, outerLip, auto: true, tiltDeg: tilt, face: faceGuides(f, w, h) };
     }
   } catch (e) {
     console.warn("Face engine unavailable:", e);
@@ -806,6 +811,7 @@ function drawGuides(
   selected: number | null,
   face?: FaceGuides | null,
   lower: { x0: number; x1: number; y0: number; y1: number }[] = [],
+  lips: { inner: Pt[]; outer: Pt[] } | null = null,
 ) {
   cv.width = o.width;
   cv.height = o.height;
@@ -931,6 +937,17 @@ function drawGuides(
         g.arc(t.cx + region.x0, t.by + region.y0, lw * 2.2, 0, Math.PI * 2);
         g.fill();
       }
+      }
+    }
+    // lip borders (orange): face-mesh lip rings, a real detection, drawn only when a whole face was found
+    if (lips) {
+      g.strokeStyle = "#f97316";
+      g.lineWidth = lw;
+      for (const ring of [lips.outer, lips.inner]) {
+        g.beginPath();
+        ring.forEach((q, i) => (i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)));
+        g.closePath();
+        g.stroke();
       }
     }
     // lower arch (analysis only): tooth edges from the lower-row boxes, drawn in the same legend. Edges within 6 px are merged. Incisal edge is the top of the box.
@@ -1332,7 +1349,7 @@ export default function Studio() {
     beforeShow.current.height = o.height;
     beforeShow.current.getContext("2d")!.drawImage(o, 0, 0);
     paintAfter(o, afterRef.current, region, engine, { level, smooth, straighten, balance, enamel, edits });
-    if (guideRef.current) drawGuides(guideRef.current, o, region, engine, showGuides, sel, showFace ? analysis?.face : null, lowerBoxes);
+    if (guideRef.current) drawGuides(guideRef.current, o, region, engine, showGuides, sel, showFace ? analysis?.face : null, lowerBoxes, analysis && !analysis.close && analysis.outerLip ? { inner: analysis.polygon, outer: analysis.outerLip } : null);
   }, [step, region, level, hasPhoto, engine, smooth, straighten, balance, enamel, edits, showGuides, sel, showFace, analysis, lowerBoxes]);
 
   /* option previews (whitening / bonding / veneers style) */
