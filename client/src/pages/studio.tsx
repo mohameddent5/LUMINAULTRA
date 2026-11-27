@@ -1372,11 +1372,10 @@ export default function Studio() {
     let design: Proposal | null = null;
     if (engine && region && showGuides) {
       const upT = engine.teeth.filter((t) => t.incisalDown);
-      design = analysis?.close
-        ? { ok: false, reason: "This is a close-up of the teeth with no face in frame, so the facial midline and lips cannot be checked. No design is drawn." }
-        : !shapeOk
-          ? { ok: false, reason: "The teeth are not clear and separate enough to draw a design honestly (damaged, merged or crowded outlines). No design is drawn." }
-          : proposeOutline(upT, region, gumVisibleShare(o, region, upT) >= 0.5, true, analysis && !analysis.close && analysis.outerLip ? analysis.polygon : null);
+      design = !shapeOk
+        ? { ok: false, reason: "The teeth are not clear and separate enough to draw a design honestly (damaged, merged or crowded outlines). No design is drawn." }
+        : proposeOutline(upT, region, gumVisibleShare(o, region, upT) >= 0.5, true, analysis && !analysis.close && analysis.outerLip ? analysis.polygon : null);
+      if (design.ok && analysis?.close) design = { ...design, notes: ["No face in frame: the facial midline and lips were not checked, so the dental midline is used as the reference.", ...design.notes] };
     } else if (engine && region) design = { ok: false, reason: "The photo checks did not pass, so no design is drawn." };
     const dn = design ? (design.ok ? { ok: true, text: design.notes.join(" ") } : { ok: false, text: design.reason }) : null;
     setDesignNote((p) => (p && dn && p.ok === dn.ok && p.text === dn.text ? p : dn));
