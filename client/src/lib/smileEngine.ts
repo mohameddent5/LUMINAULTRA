@@ -511,7 +511,16 @@ export function segmentTeeth(region: RegionLike, instanceLabels?: Int32Array): T
   const meanY = teeth.reduce((a, t) => a + t.cy, 0) / teeth.length;
   const spreadY = Math.max(...teeth.map((t) => t.cy)) - Math.min(...teeth.map((t) => t.cy));
   // Only call teeth "lower" when the photo really shows two rows.
-  for (const t of teeth) t.incisalDown = spreadY < h * 0.18 ? true : t.cy <= meanY;
+  // Two rows only when the centre heights split by a real gap (at least 60% of the median tooth height, NEITHER-sourced).
+  // The old test (spread over 18% of the region) misfired on a normal smile arc, where central teeth sit lower than canines,
+  // and dropped the central teeth from the upper row (seen on clean ex26/ex27, 7 and 8 teeth found, design refused).
+  const cys = teeth.map((t) => t.cy).sort((a, b) => a - b);
+  const bhs = teeth.map((t) => t.bh).sort((a, b) => a - b);
+  let gapAt = -1, gapV = 0;
+  for (let i = 0; i < cys.length - 1; i++) if (cys[i + 1] - cys[i] > gapV) { gapV = cys[i + 1] - cys[i]; gapAt = i; }
+  const twoRows = spreadY >= h * 0.18 && gapAt >= 0 && gapV >= 0.6 * bhs[Math.floor(bhs.length / 2)];
+  const split = gapAt >= 0 ? (cys[gapAt] + cys[gapAt + 1]) / 2 : meanY;
+  for (const t of teeth) t.incisalDown = twoRows ? t.cy <= split : true;
   return {
     w,
     h,
