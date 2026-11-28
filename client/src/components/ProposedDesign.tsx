@@ -1,0 +1,51 @@
+import { useEffect, useMemo, useRef } from "react";
+import { autoDesign } from "@/lib/autoDesign";
+import type { ScreenInput } from "@/lib/screening";
+
+/** Automatic proposed design next to the untouched photo. Estimated from ratios; not a finished treatment plan. */
+export function ProposedDesign({ src, input, flags, muted, card }: { src: HTMLCanvasElement; input: ScreenInput; flags: string[]; muted: string; card: string }) {
+  const d = useMemo(() => autoDesign(input), [input.teeth, input.face, input.region.x0, input.region.y0]); // eslint-disable-line react-hooks/exhaustive-deps
+  const a = useRef<HTMLCanvasElement>(null), b = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    if (!d || !a.current || !b.current) return;
+    const bb = d.bbox, w = bb.x1 - bb.x0, h = bb.y1 - bb.y0;
+    const padX = w * 0.35, padY = h * 0.6;
+    const sx = Math.max(0, bb.x0 - padX), sy = Math.max(0, bb.y0 - padY);
+    const sw = Math.min(src.width - sx, w + 2 * padX), sh = Math.min(src.height - sy, h + 2 * padY);
+    const scale = Math.min(2.2, 560 / sw);
+    for (const [c, after] of [[a.current, false], [b.current, true]] as const) {
+      c.width = Math.round(sw * scale); c.height = Math.round(sh * scale);
+      const g = c.getContext("2d")!;
+      g.drawImage(src, sx, sy, sw, sh, 0, 0, c.width, c.height);
+      if (!after) continue;
+      g.save(); g.scale(scale, scale); g.translate(-sx, -sy);
+      const lw = Math.max(1.2, sw / 330);
+      const path = (poly: { x: number; y: number }[]) => { g.beginPath(); poly.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.closePath(); };
+      g.lineJoin = "round";
+      for (const t of d.teeth) { path(t.poly); g.fillStyle = "rgba(255,255,255,0.22)"; g.fill(); g.strokeStyle = "rgba(255,255,255,0.95)"; g.lineWidth = lw; g.stroke(); }
+      g.setLineDash([lw * 3, lw * 2]); g.strokeStyle = "#f472b6"; g.lineWidth = lw; g.beginPath(); d.gum.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.stroke(); g.setLineDash([]);
+      g.fillStyle = "#f472b6"; for (const p of d.gum) { g.beginPath(); g.arc(p.x, p.y, lw * 1.6, 0, 6.3); g.fill(); }
+      g.strokeStyle = "#38bdf8"; g.beginPath(); g.moveTo(d.plane[0].x, d.plane[0].y); g.lineTo(d.plane[1].x, d.plane[1].y); g.stroke();
+      g.strokeStyle = "#fcd34d"; g.beginPath(); g.moveTo(d.midline[0].x, d.midline[0].y); g.lineTo(d.midline[1].x, d.midline[1].y); g.stroke();
+      g.font = `600 ${Math.max(8, sw / 38)}px sans-serif`; g.textAlign = "center"; g.fillStyle = "#fff"; g.strokeStyle = "rgba(15,23,42,0.85)"; g.lineWidth = lw * 2;
+      for (const t of d.teeth) { const s = `${t.widthRel.toFixed(2)}`; g.strokeText(s, t.edge.x, t.edge.y + sw / 30); g.fillText(s, t.edge.x, t.edge.y + sw / 30); }
+      g.restore();
+    }
+  }, [d, src]);
+  if (!d) return <section className={card} data-testid="proposed-design"><h3 className="text-xl font-semibold">Proposed design (automatic)</h3><p className={muted}>Fewer than 3 upper teeth were found, so no design was drawn. Retake with the upper front teeth in frame.</p></section>;
+  return (
+    <section className={card} data-testid="proposed-design">
+      <h3 className="text-xl font-semibold">Proposed design (automatic, for the dentist)</h3>
+      <p className={muted}>Left: the photo as taken. Right: proposed outlines for the six upper front teeth, gingival zenith line (pink), incisal plane (blue) and midline (yellow). The numbers under the teeth are widths relative to the central incisor (1.00). Drawn from ratios, so it appears even when decay or quality checks raise a flag.</p>
+      <div className="flex flex-wrap gap-3 mt-2">
+        <figure><canvas ref={a} className="max-w-full rounded" data-testid="design-before" /><figcaption className={muted}>Before (photo)</figcaption></figure>
+        <figure><canvas ref={b} className="max-w-full rounded" data-testid="design-after" /><figcaption className={muted}>Proposed (estimated outlines, not a simulated result)</figcaption></figure>
+      </div>
+      <ul className={`${muted} list-disc pl-5 mt-2`}>
+        <li>Midline: {d.basis.midline}. Incisal plane: {d.basis.plane}. Size: {d.basis.span} ({d.basis.nUsed} teeth used).</li>
+        <li>Golden-proportion widths (apparent 1.6 : 1 : 0.6), height = width / 0.78, laterals about 7% shorter, lateral zeniths about 8% lower. Tooth boxes are rough (plus or minus 15%), so check size by eye.</li>
+        {flags.map((f) => <li key={f}>Flag: {f}</li>)}
+      </ul>
+    </section>
+  );
+}

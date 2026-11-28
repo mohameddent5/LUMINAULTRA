@@ -1,4 +1,5 @@
 import { lesionFlags, INVESTIGATIONAL } from "@/lib/lesionFlags";
+import { ProposedDesign } from "@/components/ProposedDesign";
 import { RefLinesEditor } from "@/components/RefLinesEditor";
 import { spacingNotes } from "@/lib/spacingGeometry";
 import { bracesSuspected } from "@/lib/bracesCheck";
@@ -2253,6 +2254,14 @@ export default function Studio() {
                       </ul>
                     </details>
                   </div>
+                )}
+                {engine && region && originalRef.current && (
+                  <ProposedDesign src={originalRef.current} input={{ face: analysis?.face || null, teeth: engine.teeth, region }} muted={muted} card={`rounded-2xl p-5 space-y-3 ${card}`}
+                    flags={[
+                      ...(quality ? quality.signals.filter((x) => !x.ok).map((x) => `photo check "${x.id}" did not pass, so tooth boxes may be off`) : []),
+                      ...(lesionFlags(engine).length ? [`${lesionFlags(engine).length} tooth/teeth with dark patches (possible decay). ${INVESTIGATIONAL.en}`] : []),
+                      ...(checkMode(quality, engine) ? ["braces or possible decay flagged: outlines on those teeth are less reliable, verify clinically"] : []),
+                    ]} />
                 )}
                 {engine && region && quality?.acceptable && originalRef.current && (
                   <RefLinesEditor src={originalRef.current} input={{ face: analysis?.face || null, teeth: engine.teeth, region }} caseKey={`${caseId}-${photoVersion}`} muted={muted} card={card} />

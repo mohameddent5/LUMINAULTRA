@@ -31,3 +31,9 @@ Order after this update: (1) DONE: draggable reference lines on the photo, live 
 ## Progress (Nov 28 evening)
 - Step 2 DONE: facial thirds lines (glabella, subnasale, menton from the face mesh) drawn as dashed horizontals, with middle vs lower third and 1:2 lower-third split findings. Mesh points, about 5 to 10% error; hair line not measured.
 - Step 3 DONE (rough): per-tooth width and W/H labels on the 6 anterior teeth, sized to each tooth. Rough boxes; draggable tooth edges are still to do.
+
+## Redirect (Nov 28, 5:54 PM): automatic proposed design first
+Mohamed: no dragging, everything automatic; measurement is only the analysis layer, the product is the proposed design drawn on the photo.
+- DONE (first version): client/src/lib/autoDesign.ts and ProposedDesign.tsx draw proposed outlines of the 6 upper front teeth, gingival zenith line, incisal plane (parallel to the eye line when a face is found) and midline (facial midline when found), before vs proposed, with flags. No quality or decay gate stops it (needs 3+ upper teeth).
+- Open: canine looks too narrow with golden widths (0.62 of a central); try 1 : 0.75 : 0.7. Outline is an estimate, not a simulated result. No held-out scoring yet (nothing to score against: there is no hand-drawn design ground truth).
+- Next: gum-show / zenith heights in mm, smile arc following the lower lip, patient-wording cleanup, test on decay and braces photos.
