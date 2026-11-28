@@ -8,7 +8,7 @@
 export type P2 = { x: number; y: number };
 export interface ScreenTooth { cx: number; cy: number; bx: number; by: number; bw: number; bh: number; incisalDown: boolean }
 export interface ScreenInput {
-  face?: { ipl: [P2, P2]; mid: [P2, P2]; com: [P2, P2]; marks?: { glabella: P2; subnasale: P2; stomion: P2; menton: P2 } } | null;
+  face?: { ipl: [P2, P2]; mid: [P2, P2]; com: [P2, P2]; marks?: { glabella: P2; subnasale: P2; stomion: P2; menton: P2; upperLip?: P2 } } | null;
   /** tooth boxes in region coordinates; region.x0 and y0 convert them to canvas pixels */
   teeth: ScreenTooth[];
   region: { x0: number; y0: number };
@@ -33,7 +33,7 @@ const side = (dx: number) => (dx > 0 ? "patient's left" : "patient's right");
 
 export interface RefLines {
   /** facial thirds landmarks (face mesh) */
-  marks?: { glabella: P2; subnasale: P2; stomion: P2; menton: P2 };
+  marks?: { glabella: P2; subnasale: P2; stomion: P2; menton: P2; upperLip?: P2 };
   ipl?: [P2, P2];
   mid?: [P2, P2];
   com?: [P2, P2];
@@ -43,6 +43,8 @@ export interface RefLines {
   inc?: [P2, P2];
   /** width of a central incisor in pixels, the scale for percent and mm values */
   cw?: number;
+  /** image y of the top of the two central tooth boxes (about the gingival margin) */
+  ctop?: number;
   /** pixels per mm once the dentist has calibrated on a tooth; absent means the 8.5 mm assumption is used */
   pxPerMm?: number;
 }
@@ -112,6 +114,16 @@ export function measureLines(L: RefLines): Finding[] {
       note: "Line through the incisal edge points of the front upper teeth. Edge points come from the tooth boxes and a curved arch tilts the fit a little, so about 2 to 3° error. The occlusal plane itself needs a profile or an intraoral view.",
     });
   }
+  if (L.marks?.upperLip && L.ctop !== undefined && L.cw) {
+    const ppm = L.pxPerMm || L.cw / CENTRAL_WIDTH_MM;
+    const gum = (L.ctop - L.marks.upperLip.y) / ppm;
+    const cal = L.pxPerMm ? "calibrated on the entered central width" : `scaled by assuming a ${CENTRAL_WIDTH_MM} mm central incisor`;
+    out.push({
+      id: "gum-show", label: "Gum show at this smile (upper lip edge to top of the central teeth)", value: gum <= 0 ? `none (lip covers about ${r1(-gum)} mm of crown)` : `${r1(gum)} mm`,
+      level: gum > 3 ? "check" : gum > 2 ? "note" : "ok",
+      note: `Goal: 0 to 2 mm; above 3 mm is a gummy smile. Only valid if the photo is a natural posed smile. The top of the tooth box stands in for the gingival margin and the lip edge comes from the face mesh, so expect about 1 mm error; ${cal}.`,
+    });
+  }
   return out;
 }
 
@@ -129,6 +141,7 @@ export function autoLines(inp: ScreenInput): { lines: RefLines; trusted: boolean
   const midX = inp.region.x0 + (A.bx + A.bw + B.bx) / 2;
   const top = inp.region.y0 + Math.min(A.by, B.by), bot = inp.region.y0 + Math.max(A.by + A.bh, B.by + B.bh);
   L.cw = (A.bw + B.bw) / 2;
+  L.ctop = inp.region.y0 + (A.by + B.by) / 2;
   // the dental midline is only trusted when 3 teeth sit each side and the two sides have similar width (same rule as the design)
   const nl = best + 1, nr = up.length - best - 1;
   const first = up[Math.max(0, best - 2)], last = up[Math.min(up.length - 1, best + 3)];

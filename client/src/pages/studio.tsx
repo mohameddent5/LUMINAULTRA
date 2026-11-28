@@ -1,5 +1,5 @@
 import { lesionFlags, INVESTIGATIONAL } from "@/lib/lesionFlags";
-import { ProposedDesign } from "@/components/ProposedDesign";
+import { DsdFlow } from "@/components/DsdFlow";
 import { RefLinesEditor } from "@/components/RefLinesEditor";
 import { spacingNotes } from "@/lib/spacingGeometry";
 import { bracesSuspected } from "@/lib/bracesCheck";
@@ -341,7 +341,7 @@ type FaceGuides = {
   comCantDeg: number; // commissure line angle relative to the eye line
   midOffsetPct: number; // mouth centre vs facial midline, % of mouth width (+ = patient's left)
   /** landmark points for the facial thirds */
-  marks?: { glabella: Pt; subnasale: Pt; stomion: Pt; menton: Pt };
+  marks?: { glabella: Pt; subnasale: Pt; stomion: Pt; menton: Pt; upperLip?: Pt };
 };
 
 function faceGuides(f: { x: number; y: number }[], w: number, h: number): FaceGuides {
@@ -370,7 +370,7 @@ function faceGuides(f: { x: number; y: number }[], w: number, h: number): FaceGu
     mid: [brow, chin],
     com: [cL, cR],
     lipMid,
-    marks: { glabella: P(9), subnasale: P(2), stomion: lipMid, menton: chin },
+    marks: { glabella: P(9), subnasale: P(2), stomion: lipMid, menton: chin, upperLip: P(13) },
     comCantDeg: comAng - iplAng,
     midOffsetPct: (sign * Math.hypot(lipMid.x - foot.x, lipMid.y - foot.y) * 100) / mouthW,
   };
@@ -2256,15 +2256,12 @@ export default function Studio() {
                   </div>
                 )}
                 {engine && region && originalRef.current && (
-                  <ProposedDesign src={originalRef.current} input={{ face: analysis?.face || null, teeth: engine.teeth, region }} muted={muted} card={`rounded-2xl p-5 space-y-3 ${card}`}
+                  <DsdFlow src={originalRef.current} input={{ face: analysis?.face || null, teeth: engine.teeth, region }} caseKey={`${caseId}-${photoVersion}`} muted={muted} card={card}
                     flags={[
                       ...(quality ? quality.signals.filter((x) => !x.ok).map((x) => `photo check "${x.id}" did not pass, so tooth boxes may be off`) : []),
                       ...(lesionFlags(engine).length ? [`${lesionFlags(engine).length} tooth/teeth with dark patches (possible decay). ${INVESTIGATIONAL.en}`] : []),
                       ...(checkMode(quality, engine) ? ["braces or possible decay flagged: outlines on those teeth are less reliable, verify clinically"] : []),
                     ]} />
-                )}
-                {engine && region && quality?.acceptable && originalRef.current && (
-                  <RefLinesEditor src={originalRef.current} input={{ face: analysis?.face || null, teeth: engine.teeth, region }} caseKey={`${caseId}-${photoVersion}`} muted={muted} card={card} />
                 )}
                 <div className={`rounded-2xl p-5 space-y-3 ${card}`}>
                   <div className="flex items-center justify-between gap-3 flex-wrap">

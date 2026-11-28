@@ -43,7 +43,7 @@ export function ProposedDesign({ src, input, flags, muted, card }: { src: HTMLCa
       </div>
       <ul className={`${muted} list-disc pl-5 mt-2`}>
         <li>Midline: {d.basis.midline}. Incisal plane: {d.basis.plane}. Size: {d.basis.span} ({d.basis.nUsed} teeth used).</li>
-        <li>Golden-proportion widths (apparent 1.6 : 1 : 0.6), height = width / 0.78, laterals about 7% shorter, lateral zeniths about 8% lower. Tooth boxes are rough (plus or minus 15%), so check size by eye.</li>
+        <li>Widths central 1 : lateral 0.75 : canine 0.7, height = width / 0.78, laterals about 7% shorter, lateral zeniths about 8% lower. Tooth boxes are rough (plus or minus 15%), so check size by eye.</li>
         {flags.map((f) => <li key={f}>Flag: {f}</li>)}
       </ul>
     </section>

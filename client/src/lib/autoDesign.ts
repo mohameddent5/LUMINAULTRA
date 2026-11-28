@@ -2,7 +2,7 @@ import { autoLines, type P2, type ScreenInput } from "./screening";
 
 /**
  * Automatic proposed design for the upper anterior six, drawn from ratios only (no gate, no decay check).
- * Everything is an estimate from rough tooth boxes: widths follow the golden proportion (apparent 1.6 : 1 : 0.6),
+ * Everything is an estimate from rough tooth boxes: widths follow the average proportions (central 1 : lateral 0.75 : canine 0.7),
  * height = width / 0.78, laterals 7% shorter at the edge with their gum zenith 8% lower than the centrals.
  * Output is in canvas pixels, ready to draw.
  */
@@ -16,7 +16,7 @@ export interface AutoDesign {
   bbox: { x0: number; y0: number; x1: number; y1: number };
 }
 
-const GOLD = [0.618, 1, 1.618]; // canine, lateral, central (apparent widths)
+const GOLD = [0.7, 0.75, 1]; // canine, lateral, central (apparent widths, average proportions)
 
 export function autoDesign(inp: ScreenInput): AutoDesign | null {
   const up = inp.teeth.filter((t) => t.incisalDown).sort((a, b) => a.cx - b.cx);
