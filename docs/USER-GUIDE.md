@@ -36,4 +36,4 @@ Numbers are shown as ratios and percentages by default. Millimetres appear only 
 - See `docs/open-items.md` for the running list and the numbers.
 
 ## Privacy
-Photos are processed in the browser. Patient photos, videos and labels used for testing stay out of the code repository. Do not use real patient photos on a deployed copy until the database is set up with a fresh, isolated Postgres (see `docs/DEPLOY.md`).
+Photo analysis runs in the browser. Saving cases to a server needs a database and is off until one is set up. Patient photos, videos and labels used for testing stay out of the code repository. Do not use real patient photos on a deployed copy until the database is set up with a fresh, isolated Postgres (see `docs/DEPLOY.md`).
