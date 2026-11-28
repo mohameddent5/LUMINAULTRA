@@ -2137,7 +2137,7 @@ export default function Studio() {
             {engine && (
               <label className={`flex items-center gap-2 text-base ${muted}`}>
                 <input type="checkbox" checked={showDetect} onChange={(e) => setShowDetect(e.target.checked)} />
-                Detected structure (advanced)
+                {lang === "ar" ? "البنية المكتشفة (متقدم)" : "Detected structure (advanced)"}
               </label>
             )}
 

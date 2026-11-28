@@ -49,6 +49,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     } finally { setBusy(false); }
   };
 
+  const ar = () => localStorage.getItem("studioLang") === "ar";
   const [tempHidden, setTempHidden] = useState(() => sessionStorage.getItem("tempStoreHidden") === "1");
   const signOut = async () => {
     await flushPending();
@@ -64,17 +65,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
         {children}
         {tempStore && !syncBad && !tempHidden && (
           <div data-testid="temp-store" role="status" className="fixed bottom-3 left-3 right-3 sm:right-auto sm:max-w-md z-[100] rounded bg-amber-900/95 text-amber-100 text-xs px-3 py-2 flex items-start gap-3">
-            <span>This server has no database connected, so saved cases are kept in this browser and in server memory only. A server restart loses the server copy, and clearing this browser loses the browser copy. There is no backup yet.</span>
-            <button type="button" aria-label="Dismiss this notice" onClick={() => { sessionStorage.setItem("tempStoreHidden", "1"); setTempHidden(true); }} className="shrink-0 underline">Got it</button>
+            <span dir={ar() ? "rtl" : undefined}>{ar() ? "هذا الخادم غير متصل بقاعدة بيانات، لذا تُحفظ الحالات في هذا المتصفح وفي ذاكرة الخادم فقط. إعادة تشغيل الخادم تُفقد نسخة الخادم، ومسح هذا المتصفح يُفقد نسخة المتصفح. لا توجد نسخة احتياطية بعد." : "This server has no database connected, so saved cases are kept in this browser and in server memory only. A server restart loses the server copy, and clearing this browser loses the browser copy. There is no backup yet."}</span>
+            <button type="button" aria-label="Dismiss this notice" onClick={() => { sessionStorage.setItem("tempStoreHidden", "1"); setTempHidden(true); }} className="shrink-0 underline">{ar() ? "حسناً" : "Got it"}</button>
           </div>
         )}
         {syncBad && (
           <div className="fixed bottom-3 left-3 z-[100] rounded bg-red-900/90 text-red-100 text-xs px-3 py-2">
-            Changes are not saving to the server. Check your connection; do not clear this browser's data yet.
+            {ar() ? "التغييرات لا تُحفظ على الخادم. تحقق من اتصالك ولا تمسح بيانات هذا المتصفح الآن." : "Changes are not saving to the server. Check your connection; do not clear this browser's data yet."}
           </div>
         )}
         <button onClick={signOut} className="fixed top-1 right-1 z-[100] text-xs px-2 py-1 text-white/70 hover:text-white underline">
-          Sign out
+          {ar() ? "تسجيل الخروج" : "Sign out"}
         </button>
       </>
     );
