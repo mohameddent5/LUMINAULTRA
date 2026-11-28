@@ -9,6 +9,35 @@ const GOAL: Record<string, string> = {
   midline: "dental on facial midline, under about 2 mm", "midline-angle": "parallel to facial midline, within 2°", "incisal-plane": "parallel to eye line, within 2°",
   "gum-show": "0 to 2 mm (above 3 mm = gummy)", "incisal-asym": "under 6% of central length",
 };
+const VERIFY: Record<string, string> = {
+  "eye-line": "Retake level or confirm head position before trusting the other angles.",
+  commissure: "Compare with a full-smile clinical photo.",
+  thirds: "Check on a relaxed frontal photo with the hair line visible.",
+  "lower-third": "Check lip position at rest.",
+  midline: "Confirm on a frontal photo with a horizontal reference.",
+  "midline-angle": "Confirm with a facebow or a straight-on photo.",
+  "incisal-plane": "Check the occlusal plane clinically or with a profile photo.",
+  "gum-show": "Posed smile and at-rest photographs; periodontal probing if gingival findings are present.",
+  "incisal-asym": "Verify on the mouth with a mirror, not from the photo box.",
+};
+const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
+function printReport(rows: Finding[], flags: string[], calibrated: boolean) {
+  const w = window.open("", "_blank");
+  if (!w) return;
+  const key = rows.filter((r) => r.level !== "ok" && r.value !== "n/a");
+  const flagged = rows.filter((r) => r.level !== "ok").length;
+  const card = (r: Finding) => `<div class="card"><b>${esc(r.label)}: ${esc(r.value)}</b><div>${r.level === "check" ? "Outside the goal on this photo" : "Borderline or uncertain"} (goal: ${esc(GOAL[r.id] || "n/a")})</div><div class="v">Verify: ${esc(VERIFY[r.id] || "Check clinically.")}</div></div>`;
+  const snap = rows.map((r) => `<tr><td>${esc(r.label)}</td><td>${esc(r.value)}</td><td>${esc(GOAL[r.id] || "")}</td><td>${r.level === "ok" ? "Right" : r.level === "note" ? "Uncertain" : "Wrong"}</td></tr>`).join("");
+  const list = ["Review key findings before the patient is seated.", "Prepare full-smile and at-rest photographs for clinical comparison.", ...(rows.some((r) => r.id === "gum-show" && r.level !== "ok") ? ["Periodontal probing is recommended: gum show is outside the goal."] : []), "Frontal clinical photograph with a horizontal reference level may be useful.", ...(flagged >= 3 ? ["Several parameters flagged: consider mounted models before consultation."] : []), ...flags.map((f) => `Flag to check clinically: ${f}`)];
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Pre-clinical DSD screening summary</title><style>body{font:13px/1.4 system-ui,sans-serif;margin:24px;color:#0f172a}h1{font-size:20px;margin:0}h2{background:#0e7490;color:#fff;padding:4px 8px;font-size:12px;margin:14px 0 6px}.card{border:1px solid #94a3b8;border-radius:8px;padding:8px;margin:6px 0}.v{color:#475569;font-size:12px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #e2e8f0;padding:3px 4px;text-align:left;vertical-align:top}.meta{display:flex;gap:24px;background:#f1f5f9;padding:6px 8px;margin-top:8px}li{margin:3px 0;list-style:none}li:before{content:"\\2610  "}small{color:#475569}</style></head><body>
+<h1>Pre-clinical DSD screening summary</h1><small>Screening only. Requires clinical verification before any decision. No single score is given on purpose.</small>
+<div class="meta"><span>Patient ID: ________</span><span>Date: ${esc(new Date().toLocaleString())}</span><span>Scale: ${calibrated ? "Calibrated on entered central width" : "Assumed 8.5 mm central incisor"}</span><span>Mode: single photo, no depth</span></div>
+<h2>KEY FINDINGS (${key.length})</h2>${key.length ? key.map(card).join("") : "<div class='card'>No measured parameter is outside its goal on this photo. Still verify clinically.</div>"}
+<h2>PARAMETER SNAPSHOT</h2><table><tr><th>Measure</th><th>Value</th><th>Goal</th><th>Flag</th></tr>${snap}</table>
+<h2>ADDITIONAL OBSERVATIONS</h2><div class="card">Numbers come from a face mesh and rough tooth boxes (about 5 to 15% error); gum show and mm values are estimates (about 1 mm). Decay flags are investigational.</div>
+<h2>PRE-SESSION CONSIDERATIONS</h2><ul style="padding:0">${list.map((l) => `<li>${esc(l)}</li>`).join("")}</ul></body></html>`);
+  w.document.close(); w.focus(); setTimeout(() => w.print(), 300);
+}
 const FLAG = { ok: ["Right", "bg-emerald-400"], note: ["Uncertain / borderline", "bg-amber-300"], check: ["Wrong (outside goal)", "bg-red-400"] } as const;
 
 function Report({ input, flags, muted, card }: { input: ScreenInput; flags: string[]; muted: string; card: string }) {
@@ -26,6 +55,7 @@ function Report({ input, flags, muted, card }: { input: ScreenInput; flags: stri
     return f;
   }, [input.teeth, input.face, input.region.x0, input.region.y0]); // eslint-disable-line react-hooks/exhaustive-deps
   const gum = rows.find((r) => r.id === "gum-show");
+  const calibrated = false;
   return (
     <section className={`${card} w-full`} data-testid="dsd-report">
       <h3 className="text-xl font-semibold">Report for the dentist</h3>
@@ -34,6 +64,7 @@ function Report({ input, flags, muted, card }: { input: ScreenInput; flags: stri
         <div className="text-2xl font-semibold">{gum ? gum.value : "not measurable"}</div>
         <div className={muted}>{gum ? gum.note : "Needs a face in frame (lip edge) and 4 or more upper teeth. Without a calibrated central width it assumes an 8.5 mm central incisor."}</div>
       </div>
+      <button type="button" className="underline text-base min-h-[44px]" data-testid="report-print" onClick={() => printReport(rows, flags, calibrated)}>Print or save the report (one page)</button>
       <table className="w-full table-fixed text-left mt-3 text-base"><colgroup><col style={{ width: "42%" }} /><col style={{ width: "20%" }} /><col style={{ width: "20%" }} /><col style={{ width: "18%" }} /></colgroup>
         <thead><tr className={muted}><th className="py-1 pr-2">Measure</th><th className="pr-2">Value</th><th className="pr-2">Goal</th><th>Flag</th></tr></thead>
         <tbody>
