@@ -44,7 +44,7 @@ export function ProposedDesign({ src, input, flags, muted, card }: { src: HTMLCa
       <ul className={`${muted} list-disc pl-5 mt-2`}>
         <li data-testid="design-source">Outline source: {d.basis.fitted} of 6 teeth use the detected crown width (when it is within 20% below to 25% above the ratio width), {d.basis.ratio} use the generic ratio width (detection missing or implausible).</li>
         <li>Midline: {d.basis.midline}. Incisal plane: {d.basis.plane}. Size: {d.basis.span} ({d.basis.nUsed} teeth used).</li>
-        <li>Generic ratio is central 1 : lateral 0.75 : canine 0.7; height = width / 0.78, laterals about 7% shorter, lateral zeniths about 8% lower. Tooth boxes are rough (plus or minus 15%), so check size by eye.</li>
+        <li>Generic ratio is the RED 75% rule (each tooth 75% of the apparent width of the one nearer the midline: central 1, lateral 0.75, canine 0.56), a teaching choice; height = width / 0.78 is derived from a W/H goal, not measured, laterals about 7% shorter, lateral zeniths about 8% lower. Tooth boxes are rough (plus or minus 15%), so check size by eye.</li>
         {flags.map((f) => <li key={f}>Flag: {f}</li>)}
       </ul>
     </section>

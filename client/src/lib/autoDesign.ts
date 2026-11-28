@@ -16,7 +16,8 @@ export interface AutoDesign {
   bbox: { x0: number; y0: number; x1: number; y1: number };
 }
 
-const GOLD = [0.7, 0.75, 1]; // canine, lateral, central (apparent widths, average proportions)
+/** RED proportion 75%: each tooth is 75% of the apparent width of the one nearer the midline (canine, lateral, central). A teaching choice, not a measured norm; the golden proportion is weak evidence and is not used. */
+const GOLD = [0.5625, 0.75, 1];
 
 export function autoDesign(inp: ScreenInput): AutoDesign | null {
   const up = inp.teeth.filter((t) => t.incisalDown).sort((a, b) => a.cx - b.cx);

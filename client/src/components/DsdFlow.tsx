@@ -8,7 +8,13 @@ import { ProposedDesign } from "./ProposedDesign";
 const GOAL: Record<string, string> = {
   "eye-line": "0 to 2° (level)", commissure: "parallel to eye line, within 2°", thirds: "about 100% (middle = lower third)", "lower-third": "about 1 : 2",
   midline: "dental on facial midline, under about 2 mm", "midline-angle": "parallel to facial midline, within 2°", "incisal-plane": "parallel to eye line, within 2°",
-  "gum-show": "0 to 2 mm (above 3 mm = gummy)", "scale-check": "about 8 to 9.5 mm", "incisal-asym": "under 6% of central length",
+  "gum-show": "0 to 2 ok, 2 to 3 borderline, over 3 gummy (mm)", "scale-check": "about 8 to 9.5 mm", "incisal-asym": "under 6% of central length",
+};
+const SRC: Record<string, [string, string]> = {
+  "eye-line": ["teaching norm", "DSD protocol (PMID 28196157)"], commissure: ["teaching norm", "PMC3010027"], thirds: ["teaching norm", "PMC3010027"], "lower-third": ["teaching norm", "PMC3010027"],
+  midline: ["teaching norm", "over 2 mm is often tolerated if parallel to the facial midline (PMC6112329)"], "midline-angle": ["evidence", "cant noticed by over 90% of raters at 4 degrees (PMC3668882); our 2 degree note is a screening choice"],
+  "incisal-plane": ["evidence", "cant noticed by over 90% of raters at 4 degrees (PMC3668882); our 2 degree note is a screening choice"],
+  "gum-show": ["evidence", "up to about 3 mm accepted (doi 10.1038/s41598-023-45641-y); 0 to 2 ideal is a teaching norm"], "scale-check": ["assumption", "iris 11.7 mm and central 8.5 mm are population averages"], "incisal-asym": ["teaching norm", "PMC6112329"],
 };
 const VERIFY: Record<string, string> = {
   "eye-line": "Retake level or confirm head position before trusting the other angles.",
@@ -28,14 +34,14 @@ function printReport(rows: Finding[], flags: string[], calibrated: boolean) {
   const key = rows.filter((r) => (r.level !== "ok" || r.unreliable) && r.value !== "n/a");
   const flagged = rows.filter((r) => r.level !== "ok").length;
   const card = (r: Finding) => `<div class="card"><b>${esc(r.label)}: ${esc(r.unreliable ? "check by eye" : r.value)}</b><div>${r.unreliable ? "Not reliable on this photo" : r.level === "check" ? "Outside the goal on this photo" : "Borderline or uncertain"} (goal: ${esc(GOAL[r.id] || "n/a")})</div><div class="v">Verify: ${esc(VERIFY[r.id] || "Check clinically.")}</div></div>`;
-  const snap = rows.map((r) => `<tr><td>${esc(r.label)}</td><td>${esc(r.unreliable ? "Not reliable, check by eye: " + r.unreliable : r.value)}</td><td>${esc(GOAL[r.id] || "")}</td><td>${r.unreliable ? "Check by eye" : r.level === "ok" ? "Right" : r.level === "note" ? "Uncertain" : "Wrong"}</td></tr>`).join("");
+  const snap = rows.map((r) => `<tr><td>${esc(r.label)}</td><td>${esc(r.unreliable ? "Not reliable, check by eye: " + r.unreliable : r.value)}</td><td>${esc(GOAL[r.id] || "")}${SRC[r.id] ? `<br><small>${esc(SRC[r.id][0] + ": " + SRC[r.id][1])}</small>` : ""}</td><td>${r.unreliable ? "Check by eye" : r.level === "ok" ? "Right" : r.level === "note" ? "Uncertain" : "Wrong"}</td></tr>`).join("");
   const list = ["Review key findings before the patient is seated.", "Prepare full-smile and at-rest photographs for clinical comparison.", ...(rows.some((r) => r.id === "gum-show" && r.level !== "ok") ? ["Periodontal probing is recommended: gum show is outside the goal."] : []), "Frontal clinical photograph with a horizontal reference level may be useful.", ...(flagged >= 3 ? ["Several parameters flagged: consider mounted models before consultation."] : []), ...flags.map((f) => `Flag to check clinically: ${f}`)];
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Pre-clinical DSD screening summary</title><style>body{font:13px/1.4 system-ui,sans-serif;margin:24px;color:#0f172a}h1{font-size:20px;margin:0}h2{background:#0e7490;color:#fff;padding:4px 8px;font-size:12px;margin:14px 0 6px}.card{border:1px solid #94a3b8;border-radius:8px;padding:8px;margin:6px 0}.v{color:#475569;font-size:12px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #e2e8f0;padding:3px 4px;text-align:left;vertical-align:top}.meta{display:flex;gap:24px;background:#f1f5f9;padding:6px 8px;margin-top:8px}li{margin:3px 0;list-style:none}li:before{content:"\\2610  "}small{color:#475569}</style></head><body>
 <h1>Pre-clinical DSD screening summary</h1><small>Screening only. Requires clinical verification before any decision. No single score is given on purpose.</small>
 <div class="meta"><span>Patient ID: ________</span><span>Date: ${esc(new Date().toLocaleString())}</span><span>Scale: ${calibrated ? "Calibrated on entered central width" : "Assumed 8.5 mm central incisor"}</span><span>Mode: single photo, no depth</span></div>
 <h2>KEY FINDINGS (${key.length})</h2>${key.length ? key.map(card).join("") : "<div class='card'>No measured parameter is outside its goal on this photo. Still verify clinically.</div>"}
 <h2>PARAMETER SNAPSHOT</h2><table><tr><th>Measure</th><th>Value</th><th>Goal</th><th>Flag</th></tr>${snap}</table>
-<h2>ADDITIONAL OBSERVATIONS</h2><div class="card">Numbers come from a face mesh and rough tooth boxes (about 5 to 15% error); gum show and mm values are estimates (about 1 mm). Decay flags are investigational.</div>
+<h2>ADDITIONAL OBSERVATIONS</h2><div class="card">Heights in the design are derived (width / 0.78), not measured; 8.5 mm and 11.7 mm are population averages. Numbers come from a face mesh and rough tooth boxes (about 5 to 15% error); gum show and mm values are estimates (about 1 mm). Decay flags are investigational.</div>
 <h2>PRE-SESSION CONSIDERATIONS</h2><ul style="padding:0">${list.map((l) => `<li>${esc(l)}</li>`).join("")}</ul></body></html>`);
   w.document.close(); w.focus(); setTimeout(() => w.print(), 300);
 }
@@ -79,14 +85,14 @@ function Report({ input, flags, muted, card, fs }: { fs?: FrameStats | null; inp
             <tr key={r.id} className="border-t border-white/10 align-top" data-testid={`report-${r.id}`}>
               <td className="py-2 pr-2">{r.label}<div className={`text-sm ${muted}`}>{r.note}</div></td>
               <td className="pr-2 break-words">{r.unreliable ? `Not reliable, check by eye (${r.unreliable})` : r.value}</td>
-              <td className="pr-2">{GOAL[r.id] || ""}</td>
+              <td className="pr-2">{GOAL[r.id] || ""}{SRC[r.id] && <div className={`text-sm ${muted}`}>{SRC[r.id][0]}: {SRC[r.id][1]}</div>}</td>
               <td><span className={`inline-block w-3 h-3 rounded-full mr-1 ${r.unreliable ? "bg-slate-400" : FLAG[r.level][1]}`} />{r.unreliable ? "Check by eye" : FLAG[r.level][0]}</td>
             </tr>
           ))}
         </tbody>
       </table>
       {flags.length > 0 && <ul className={`${muted} list-disc pl-5 mt-2`}>{flags.map((x) => <li key={x}>Flag: {x}</li>)}</ul>}
-      <p className={`${muted} mt-2`}>Confidence: measured on one 2D photo with no depth, from a face mesh and rough tooth boxes (about 5 to 15% error). Goals are common DSD teaching values, not clinical cut-offs. "Right" means inside the goal on this photo, not a diagnosis. Any decay or braces flag is for the dentist to check clinically. There is no single DSD score on purpose.</p>
+      <p className={`${muted} mt-2`}>Confidence: measured on one 2D photo with no depth, from a face mesh and rough tooth boxes (about 5 to 15% error). Goals are marked "teaching norm" or "evidence" with their source. Tooth heights in the design are derived from a W/H goal (width / 0.78), not measured. The 8.5 mm central and 11.7 mm iris are population-average assumptions. Buccal corridor is not scored because the evidence is mixed. "Right" means inside the goal on this photo, not a diagnosis. Any decay or braces flag is for the dentist to check clinically. There is no single DSD score on purpose.</p>
     </section>
   );
 }
