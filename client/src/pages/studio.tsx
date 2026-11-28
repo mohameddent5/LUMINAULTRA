@@ -2389,6 +2389,7 @@ export default function Studio() {
             onClick={() => {
               runRef.current++; // cancels any analysis still running
               setBusy(false);
+              stopCamera(); // leaving the photo step must switch the camera off
               if (step === 2) {
                 setStep(1);
                 setHasPhoto(false);
