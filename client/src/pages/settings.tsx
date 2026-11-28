@@ -56,11 +56,18 @@ export default function Settings() {
     input.type = "file";
     input.accept = ".json";
     input.onchange = (e: any) => {
-      const file = e.target.files[0];
+      const file = e.target.files?.[0];
+      if (!file) return;
       const reader = new FileReader();
       reader.onload = (ev: any) => {
         try {
           const data = JSON.parse(ev.target.result);
+          // check the shape before touching anything: a wrong file must not wipe or corrupt saved cases
+          const okObj = (v: unknown) => v === undefined || (typeof v === "object" && v !== null && !Array.isArray(v));
+          const okArr = (v: unknown) => v === undefined || Array.isArray(v);
+          if (typeof data !== "object" || data === null || !okObj(data.settings) || !okArr(data.patients) || !okArr(data.snapshots) || !okArr(data.plans) || (data.settings === undefined && data.patients === undefined && data.snapshots === undefined && data.plans === undefined)) throw new Error("shape");
+          const n = (Array.isArray(data.patients) ? data.patients.length : 0);
+          if (!window.confirm(`Restore this backup? It replaces the current clinic profile and saved cases on this device (${n} patient${n === 1 ? "" : "s"} in the file). This cannot be undone.`)) return;
           if (data.settings) localStorage.setItem("clinicSettings", JSON.stringify(data.settings));
           if (data.patients) localStorage.setItem("patientArchive", JSON.stringify(data.patients));
           if (data.snapshots) localStorage.setItem("capturedSnapshots", JSON.stringify(data.snapshots));
@@ -68,7 +75,7 @@ export default function Settings() {
           setSettings(data.settings || settings);
           toast({ title: "Imported", description: "Data restored from backup" });
         } catch (err) {
-          toast({ title: "Error", description: "Invalid backup file", variant: "destructive" });
+          toast({ title: "Error", description: "This is not a valid backup file. Nothing was changed.", variant: "destructive" });
         }
       };
       reader.readAsText(file);
