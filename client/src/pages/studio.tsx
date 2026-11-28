@@ -757,6 +757,7 @@ async function refineWithSam(g: Graded, onProgress?: (f: number) => void): Promi
       }
     }
     const r = regrade(c, g.analysis, region, inst);
+    if (r.engine && sam.upperRowSuspect) (r.engine as { rowSuspect?: boolean }).rowSuspect = true;
     const lower = sam.lowerBoxes.map((b) => ({ x0: b.x0 / k, x1: b.x1 / k, y0: b.y0 / k, y1: b.y1 / k }));
     return r.engine ? { ...r, sam, lower } : { ...g, sam: null };
   } catch (e) {
@@ -1047,6 +1048,7 @@ function drawGuides(
 }
 
 function tierOf(q: CaptureQuality | null, e: TeethEngine | null, closeUp = false): "A" | "B" | "C" {
+  if ((e as { rowSuspect?: boolean } | null)?.rowSuspect) return "C";
   if (bracesSuspected(e)) return "C";
   if (!q || !q.acceptable) return "C";
   // visible decay or fracture-like dark patches: the shape tools assume sound crowns, so refuse them
@@ -1146,7 +1148,8 @@ export default function Studio() {
   const sourceRef = useRef<"file" | "camera-single" | "camera-burst">("file");
   // merged neighbours (very wide blobs) or slivers (very flat blobs) mean the outlines are not real single teeth
   const shapesPlausible = !!engine && engine.teeth.every((t) => t.bw / t.bh <= 1.3 && t.bw / t.bh >= 0.2) && Math.max(...engine.teeth.map((t) => t.area)) <= 2.2 * engine.medianArea;
-  const shapeOk = !!engine && engine.teeth.length >= 4 && engine.medianSolidity >= 0.9 && shapesPlausible && !!quality && quality.signals.find((x) => x.id === "sharpness")!.ok;
+  const rowSuspect = !!(engine as { rowSuspect?: boolean } | null)?.rowSuspect;
+  const shapeOk = !rowSuspect && !!engine && engine.teeth.length >= 4 && engine.medianSolidity >= 0.9 && shapesPlausible && !!quality && quality.signals.find((x) => x.id === "sharpness")!.ok;
 
   useEffect(() => {
     document.documentElement.lang = lang;
@@ -1462,7 +1465,9 @@ export default function Studio() {
     let design: Proposal | null = null;
     if (engine && region && showGuides) {
       const upT = engine.teeth.filter((t) => t.incisalDown);
-      design = !shapeOk
+      design = rowSuspect
+        ? { ok: false, reason: "The tool may have picked up the lower front teeth instead of the upper ones, because another tooth-sized shape sits above the teeth it found. No design is drawn. Retake with the upper front teeth fully visible and in focus, or check the upper teeth by eye." }
+        : !shapeOk
         ? { ok: false, reason: "The teeth are not clear and separate enough to draw a design honestly (damaged, merged or crowded outlines). No design is drawn." }
         : proposeOutline(upT, region, gumVisibleShare(o, region, upT) >= 0.5, true, analysis && !analysis.close && analysis.outerLip ? analysis.polygon : null, checkTeeth(engine));
       if (design.ok && checkMode(quality, engine)) design = { ...design, notes: ["CHECK: braces or possible decay were flagged on this photo, so outlines on the marked teeth are less reliable. Verify each marked tooth clinically before using the design.", ...design.notes] };

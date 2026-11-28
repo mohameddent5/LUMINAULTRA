@@ -48,6 +48,8 @@ export interface SamTeeth {
   borders: number[];
   /** lower-arch tooth boxes (below the upper row), canvas px; analysis only, not drawn */
   lowerBoxes: { x0: number; x1: number; y0: number; y1: number }[];
+  /** a tooth-sized bright mask sits above the found row: the finder may have locked onto the LOWER arch (broken or dark upper teeth missed). NEITHER-sourced; fitted on 1 positive (aa3fa16b), 0 false triggers on 20 other photos. */
+  upperRowSuspect: boolean;
   ms: number;
 }
 
@@ -216,6 +218,9 @@ export async function samTeeth(
     }
   }
   if (teeth.length < 1) return null;
+  const medAreaRow = [...teeth].map((t) => t.area).sort((x, y) => x - y)[Math.floor(teeth.length / 2)];
+  const rowTop0 = Math.min(...teeth.map((t) => t.y0)), rowX0 = Math.min(...teeth.map((t) => t.x0)), rowX1 = Math.max(...teeth.map((t) => t.x1));
+  const upperRowSuspect = teeth.length >= 1 && keep.some((k) => !teeth.includes(k) && k.x0 > 0 && k.y0 > 0 && k.x1 < ow - 1 && k.y1 < oh - 1 && (k.x0 + k.x1) / 2 > rowX0 && (k.x0 + k.x1) / 2 < rowX1 && k.area > 0.5 * medAreaRow && k.area < 4 * medAreaRow && k.lum > lt && k.cy < rowTop0 - 0.3 * bigH && k.y1 < rowTop0 + 0.2 * bigH && (k.x1 - k.x0) < 2.5 * (big.x1 - big.x0));
   // a failed wide mask often holds one real tooth plus gum or a neighbour: keep only its bright, non-claimed pixels and take the biggest solid blob
   const refineResidual = (k0: Cand, taken: Cand[]): Cand | null => {
     const thr = 0.88 * k0.lum;
@@ -359,7 +364,7 @@ export async function samTeeth(
     .filter((k, i, arr) => arr.indexOf(k) === i && okShape(k) && k.lum > lt * 0.8 && k.red < rt * 1.2 && !teeth.includes(k) && k.cy > upBottom - 0.1 * bigH && k.y0 > upBottom - 0.35 * bigH)
     .map((t) => ({ x0: rx + t.x0 / (sc * Q), x1: rx + t.x1 / (sc * Q), y0: ry + t.y0 / (sc * Q), y1: ry + t.y1 / (sc * Q) }))
     .sort((a, b) => a.x0 - b.x0);
-  return { labels, w: canvas.width, h: canvas.height, count: teeth.length, boxes, lowerBoxes, borders, ms: performance.now() - t0 };
+  return { labels, w: canvas.width, h: canvas.height, count: teeth.length, boxes, lowerBoxes, upperRowSuspect, borders, ms: performance.now() - t0 };
 }
 
 /** A result found only by a fallback must show at least this many upper teeth, else the frame stays refused (ex8 fallback gave 3 teeth, 2 of 10 borders right, 91 px median error: worse than refusing). NEITHER-sourced. */
