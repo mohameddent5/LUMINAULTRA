@@ -38,5 +38,9 @@ check("detection unchanged by the label: same flags as before", JSON.stringify(l
   const src = readFileSync("client/src/pages/studio.tsx", "utf8");
   check("every decay flag surface uses the label (screen, report, CHECK note, tier-C text)", (src.match(/INVESTIGATIONAL\./g) || []).length >= 8);
 }
+{
+  const src2 = readFileSync("client/src/pages/studio.tsx", "utf8");
+  check("overlay-refused note exists in English and Arabic and is shown only when shape tools are on and the design is refused", (src2.match(/optNoOverlay/g) || []).length === 3 && /shapeOk && designNote && !designNote\.ok/.test(src2));
+}
 console.log(failed ? `flags: ${failed} FAILED` : "flags: all checks passed");
 process.exit(failed ? 1 : 0);

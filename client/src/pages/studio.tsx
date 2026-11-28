@@ -85,6 +85,7 @@ const T = {
     optVeneer: "Veneers style",
     optVeneerHint: "Edges, alignment, sizes, bright",
     optRefused: "Bonding and veneers previews need a clear, sharp photo with separate teeth.",
+    optNoOverlay: "The design overlay is not drawn on this photo. The previews above are colour and shape suggestions only.",
     natural_depth: "Natural depth",
     natural_depthHint: "Translucent edges, warmer necks",
     guides: "Show guides",
@@ -210,6 +211,7 @@ const T = {
     optVeneer: "نمط القشور",
     optVeneerHint: "الحواف والمحاذاة والأحجام والإشراق",
     optRefused: "معاينة الحشو التجميلي والقشور تحتاج صورة واضحة وحادة بأسنان منفصلة.",
+    optNoOverlay: "لم يُرسم تصميم المحيطات على هذه الصورة. المعاينات أعلاه مجرد اقتراحات للون والشكل.",
     natural_depth: "عمق طبيعي",
     natural_depthHint: "حواف شفافة وعنق أدفأ",
     guides: "إظهار الخطوط الإرشادية",
@@ -2290,6 +2292,7 @@ export default function Studio() {
                     })}
                   </div>
                   {!shapeOk && <p className="text-amber-200 text-base">{t.optRefused}</p>}
+                  {shapeOk && designNote && !designNote.ok && <p className="text-amber-200 text-base" data-testid="opt-no-overlay">{t.optNoOverlay}</p>}
                 </div>
 
                 <div className={`rounded-2xl p-5 space-y-4 ${card}`}>
