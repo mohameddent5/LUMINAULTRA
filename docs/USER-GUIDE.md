@@ -26,6 +26,7 @@ Numbers are shown as ratios and percentages by default. Millimetres appear only 
 ## "Check" tags and flags
 - Teeth marked "check" (braces, or colour flags for possible caries) need your own look before you rely on their outline.
 - "Possible caries" is a colour prompt only. It cannot tell decay from stain, calculus, a dark filling or shadow. It is never a diagnosis.
+- Decay flags are **investigational**: every place one is shown carries "Investigational: a dentist must confirm." (English, plus an Arabic line that has not been reviewed by a native speaker). On a 14-photo development set the flags caught about 1 in 6 of the teeth marked as decayed, with a few false flags on healthy teeth. They are not clinically validated. A missing flag does not mean a tooth is sound.
 - Spacing and missing-tooth notes come from geometry (gap compared with the other gaps in the row). They are assistive and have not been validated on a labelled set.
 
 ## What has and has not been tested
