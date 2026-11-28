@@ -8,7 +8,7 @@
 export type P2 = { x: number; y: number };
 export interface ScreenTooth { cx: number; cy: number; bx: number; by: number; bw: number; bh: number; incisalDown: boolean }
 export interface ScreenInput {
-  face?: { ipl: [P2, P2]; mid: [P2, P2]; com: [P2, P2] } | null;
+  face?: { ipl: [P2, P2]; mid: [P2, P2]; com: [P2, P2]; marks?: { glabella: P2; subnasale: P2; stomion: P2; menton: P2 } } | null;
   /** tooth boxes in region coordinates; region.x0 and y0 convert them to canvas pixels */
   teeth: ScreenTooth[];
   region: { x0: number; y0: number };
@@ -32,6 +32,8 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
 const side = (dx: number) => (dx > 0 ? "patient's left" : "patient's right");
 
 export interface RefLines {
+  /** facial thirds landmarks (face mesh) */
+  marks?: { glabella: P2; subnasale: P2; stomion: P2; menton: P2 };
   ipl?: [P2, P2];
   mid?: [P2, P2];
   com?: [P2, P2];
@@ -67,6 +69,19 @@ export function measureLines(L: RefLines): Finding[] {
     }
   } else {
     out.push({ id: "no-face", label: "Facial references", value: "n/a", level: "note", note: "No whole face in the frame, so eye line, facial midline and mouth-corner line were not measured. Teeth angles below are against the image horizontal only and include any camera tilt." });
+  }
+  if (L.marks && L.mid) {
+    const m = L.marks;
+    // distances along the facial midline direction
+    const d = Math.hypot(L.mid[1].x - L.mid[0].x, L.mid[1].y - L.mid[0].y) || 1;
+    const ux = (L.mid[1].x - L.mid[0].x) / d, uy = (L.mid[1].y - L.mid[0].y) / d;
+    const al = (a: P2, b: P2) => (b.x - a.x) * ux + (b.y - a.y) * uy;
+    const mid = al(m.glabella, m.subnasale), low = al(m.subnasale, m.menton), up = al(m.subnasale, m.stomion);
+    if (mid > 0 && low > 0) {
+      const r = low / mid;
+      out.push({ id: "thirds", label: "Facial thirds: lower vs middle third", value: `${r1(r * 100)}% (subnasale to menton as a share of glabella to subnasale)`, level: Math.abs(r - 1) > 0.25 ? "check" : Math.abs(r - 1) > 0.12 ? "note" : "ok", note: "Glabella, subnasale and menton come from the face mesh and the hair line is not measured, so only middle vs lower is compared (ideal about 100%). Expression and head pitch move these points; about 5 to 10% error." });
+      if (up > 0) out.push({ id: "lower-third", label: "Lower third split: subnasale to lips vs lips to menton", value: `1 : ${r1((low - up) / up)}`, level: Math.abs((low - up) / up - 2) > 0.7 ? "note" : "ok", note: "Ideal is about 1 : 2. The lip point is the middle of the lip opening, so a wide smile shifts it." });
+    }
   }
   if (L.mid && L.dmid && L.cw) {
     const [p, q] = L.mid;
@@ -104,7 +119,7 @@ export function measureLines(L: RefLines): Finding[] {
 export function autoLines(inp: ScreenInput): { lines: RefLines; trusted: boolean; asym: Finding | null; enough: boolean } {
   const f = inp.face || null;
   const L: RefLines = {};
-  if (f) { L.ipl = f.ipl; L.mid = f.mid; L.com = f.com; }
+  if (f) { L.ipl = f.ipl; L.mid = f.mid; L.com = f.com; L.marks = f.marks; }
   const up = inp.teeth.filter((t) => t.incisalDown).sort((a, b) => a.cx - b.cx);
   if (up.length < 4) return { lines: L, trusted: false, asym: null, enough: false };
   const med = up.reduce((s, t) => s + t.cx, 0) / up.length;

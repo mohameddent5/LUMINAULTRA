@@ -35,6 +35,18 @@ export function RefLinesEditor({ src, input, caseKey, muted, card }: { src: HTML
     c.dataset.lines = JSON.stringify(lines);
     const lw = Math.max(2, src.width / 450), hr = Math.max(5, src.width / 150);
     const ext = (a: P2, b: P2, k: number): [P2, P2] => [{ x: a.x - (b.x - a.x) * k, y: a.y - (b.y - a.y) * k }, { x: b.x + (b.x - a.x) * k, y: b.y + (b.y - a.y) * k }];
+    if (lines.marks && lines.ipl) {
+      const dir = { x: lines.ipl[1].x - lines.ipl[0].x, y: lines.ipl[1].y - lines.ipl[0].y };
+      const dl = Math.hypot(dir.x, dir.y) || 1;
+      g.setLineDash([lw * 4, lw * 4]); g.font = `600 ${Math.max(10, Math.round(src.width / 80))}px sans-serif`; g.textAlign = "left";
+      (["glabella", "subnasale", "menton"] as const).forEach((n) => {
+        const q = lines.marks![n], half = src.width * 0.3;
+        g.strokeStyle = "rgba(148,163,184,0.8)"; g.lineWidth = Math.max(1, lw * 0.7);
+        g.beginPath(); g.moveTo(q.x - (dir.x / dl) * half, q.y - (dir.y / dl) * half); g.lineTo(q.x + (dir.x / dl) * half, q.y + (dir.y / dl) * half); g.stroke();
+        g.fillStyle = "rgba(203,213,225,0.95)"; g.fillText(n[0].toUpperCase() + n.slice(1), q.x + (dir.x / dl) * half + 4, q.y + (dir.y / dl) * half);
+      });
+      g.setLineDash([]);
+    }
     (Object.keys(COL) as Key[]).forEach((k) => {
       const l = lines[k];
       if (!l) return;
@@ -51,15 +63,22 @@ export function RefLinesEditor({ src, input, caseKey, muted, card }: { src: HTML
       const ppm = lines.cw && mm > 3 && mm < 15 ? lines.cw / mm : 0;
       g.textAlign = "center";
       g.font = `600 ${Math.max(10, Math.round(src.width / 90))}px sans-serif`;
-      for (const t of upT) {
+      const mid0 = lines.dmid ? (lines.dmid[0].x + lines.dmid[1].x) / 2 : upT.reduce((a, t) => a + t.cx, 0) / Math.max(1, upT.length);
+      const six = [...upT].sort((a, b) => Math.abs(a.cx - mid0) - Math.abs(b.cx - mid0)).slice(0, 6);
+      const base = Math.max(10, Math.round(src.width / 90));
+      for (const t of six) {
         const cxp = input.region.x0 + t.bx + t.bw / 2, yb = input.region.y0 + t.by + t.bh;
+        const fs = Math.min(base, t.bw / 4.8);
         const wh = t.bw / Math.max(1, t.bh);
-        const w1 = ppm ? `${(t.bw / ppm).toFixed(1)} mm` : cwPx ? `${Math.round((t.bw / cwPx) * 100)}%` : "";
+        const w1 = ppm ? `${(t.bw / ppm).toFixed(1)}mm` : cwPx ? `${Math.round((t.bw / cwPx) * 100)}%` : "";
+        const two = fs >= 8;
+        const f2 = Math.max(6, Math.min(base, two ? fs : t.bw / 3.2));
+        g.font = `600 ${f2}px sans-serif`;
         g.fillStyle = "rgba(15,23,42,0.75)";
-        g.fillRect(cxp - 30, yb + 4, 60, 2 * Math.max(10, Math.round(src.width / 90)) + 4);
+        g.fillRect(cxp - t.bw / 2 + 1, yb + 3, t.bw - 2, (two ? 2 : 1) * f2 + 4);
         g.fillStyle = Math.abs(wh - 0.75) > 0.12 ? "#fcd34d" : "#e2e8f0";
-        g.fillText(w1, cxp, yb + 4 + Math.max(10, Math.round(src.width / 90)));
-        g.fillText(`W/H ${Math.round(wh * 100)}%`, cxp, yb + 4 + 2 * Math.max(10, Math.round(src.width / 90)));
+        g.fillText(w1, cxp, yb + 3 + f2);
+        if (two) g.fillText(`W/H ${Math.round(wh * 100)}%`, cxp, yb + 3 + 2 * f2);
       }
     }
   }, [lines, src, showW, mm]); // eslint-disable-line react-hooks/exhaustive-deps
