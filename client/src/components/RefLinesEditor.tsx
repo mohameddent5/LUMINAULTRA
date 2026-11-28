@@ -13,6 +13,7 @@ export function RefLinesEditor({ src, input, caseKey, muted, card }: { src: HTML
   const auto = useMemo(() => autoLines(input), [input.teeth, input.face, input.region.x0, input.region.y0]); // eslint-disable-line react-hooks/exhaustive-deps
   const [lines, setLines] = useState<RefLines>(auto.lines);
   const [toothMm, setToothMm] = useState("");
+  const [showW, setShowW] = useState(true);
   const cv = useRef<HTMLCanvasElement>(null);
   const drag = useRef<{ k: Key; i: number | "move" } | null>(null);
   useEffect(() => { setLines(auto.lines); setToothMm(""); }, [auto, caseKey]);
@@ -44,7 +45,24 @@ export function RefLinesEditor({ src, input, caseKey, muted, card }: { src: HTML
       for (const p of l) { g.fillStyle = COL[k]; g.strokeStyle = "#0f172a"; g.lineWidth = 2; g.beginPath(); g.arc(p.x, p.y, hr, 0, Math.PI * 2); g.fill(); g.stroke(); }
       if (k === "dmid") { const m = { x: (l[0].x + l[1].x) / 2, y: (l[0].y + l[1].y) / 2 }; g.fillStyle = COL[k]; g.beginPath(); g.rect(m.x - hr, m.y - hr, 2 * hr, 2 * hr); g.fill(); g.stroke(); }
     });
-  }, [lines, src]);
+    if (showW && auto.enough) {
+      const upT = input.teeth.filter((t) => t.incisalDown).sort((a, b) => a.cx - b.cx);
+      const cwPx = lines.cw || 0;
+      const ppm = lines.cw && mm > 3 && mm < 15 ? lines.cw / mm : 0;
+      g.textAlign = "center";
+      g.font = `600 ${Math.max(10, Math.round(src.width / 90))}px sans-serif`;
+      for (const t of upT) {
+        const cxp = input.region.x0 + t.bx + t.bw / 2, yb = input.region.y0 + t.by + t.bh;
+        const wh = t.bw / Math.max(1, t.bh);
+        const w1 = ppm ? `${(t.bw / ppm).toFixed(1)} mm` : cwPx ? `${Math.round((t.bw / cwPx) * 100)}%` : "";
+        g.fillStyle = "rgba(15,23,42,0.75)";
+        g.fillRect(cxp - 30, yb + 4, 60, 2 * Math.max(10, Math.round(src.width / 90)) + 4);
+        g.fillStyle = Math.abs(wh - 0.75) > 0.12 ? "#fcd34d" : "#e2e8f0";
+        g.fillText(w1, cxp, yb + 4 + Math.max(10, Math.round(src.width / 90)));
+        g.fillText(`W/H ${Math.round(wh * 100)}%`, cxp, yb + 4 + 2 * Math.max(10, Math.round(src.width / 90)));
+      }
+    }
+  }, [lines, src, showW, mm]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toCanvas = (e: React.PointerEvent) => {
     const c = cv.current!, r = c.getBoundingClientRect();
@@ -101,10 +119,12 @@ export function RefLinesEditor({ src, input, caseKey, muted, card }: { src: HTML
       <div className="flex flex-wrap gap-3 items-center">
         <button type="button" className="underline text-base min-h-[44px]" onClick={() => setLines(auto.lines)} data-testid="reflines-reset">Reset lines</button>
         <button type="button" className="underline text-base min-h-[44px]" onClick={exportPng} data-testid="reflines-export">Save photo with lines (PNG)</button>
+        <label className="text-base flex items-center gap-2"><input type="checkbox" checked={showW} onChange={(e) => setShowW(e.target.checked)} data-testid="reflines-widths" />Tooth widths and W/H</label>
         <label className="text-base flex items-center gap-2">Central incisor width (mm), optional
           <input inputMode="decimal" value={toothMm} onChange={(e) => setToothMm(e.target.value)} className="w-20 rounded-lg px-2 py-1 bg-slate-900 border border-slate-600" data-testid="reflines-mm" />
         </label>
       </div>
+      {showW && <p className={`text-sm ${muted}`} data-testid="reflines-width-note">Tooth width and W/H labels come from the detected tooth boxes, which are rough (they can include gum, shadow or a neighbour): treat them as about plus or minus 15% and check by eye. Goal W/H is about 75%; amber means more than 12 points away from it.</p>}
       <p className={`text-sm ${muted}`}>{pxPerMm ? "mm values use the width you entered for the central teeth, so they are only as good as that number and the tooth boxes." : "Without a width, mm values assume 8.5 mm for a central incisor and are marked about."}</p>
       <ul className="space-y-2">
         {findings.map((f) => (
