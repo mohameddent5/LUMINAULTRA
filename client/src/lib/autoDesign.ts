@@ -1,4 +1,5 @@
-import { autoLines, type P2, type ScreenInput } from "./screening";
+import { autoLines, scaleOf, type P2, type ScreenInput } from "./screening";
+import { gingivalTop } from "./gingival";
 
 /**
  * Automatic proposed design for the upper anterior six, drawn from ratios only (no gate, no decay check).
@@ -6,10 +7,15 @@ import { autoLines, type P2, type ScreenInput } from "./screening";
  * height = width / 0.78, laterals 7% shorter at the edge with their gum zenith 8% lower than the centrals.
  * Output is in canvas pixels, ready to draw.
  */
-export interface DesignTooth { name: string; side: "R" | "L"; poly: P2[]; zenith: P2; edge: P2; widthRel: number; wh: number; source: "fit" | "ratio" }
+export interface DesignTooth { name: string; side: "R" | "L"; poly: P2[]; zenith: P2; edge: P2; widthRel: number; wh: number; source: "fit" | "ratio"; wMm: number; hMm: number; /** where the crown height comes from */ heightFrom: "gum colour step" | "derived (width / 0.78)" }
 export interface AutoDesign {
   teeth: DesignTooth[];
   gum: P2[]; // zeniths left to right
+  /** scalloped gum line through zeniths and papilla points, left to right (papilla height is schematic, 22% of crown height below the zenith) */
+  gumCurve: P2[];
+  mmPerPx: number; scaleTag: string;
+  /** direction of the incisal plane, for full-width reference lines */
+  angle: number; origin: P2;
   plane: [P2, P2];
   midline: [P2, P2];
   basis: { midline: string; plane: string; span: string; nUsed: number; fitted: number; ratio: number };
@@ -19,7 +25,7 @@ export interface AutoDesign {
 /** RED proportion 75%: each tooth is 75% of the apparent width of the one nearer the midline (canine, lateral, central). A teaching choice, not a measured norm; the golden proportion is weak evidence and is not used. */
 const GOLD = [0.5625, 0.75, 1];
 
-export function autoDesign(inp: ScreenInput): AutoDesign | null {
+export function autoDesign(inp: ScreenInput, photo?: HTMLCanvasElement | null): AutoDesign | null {
   const up = inp.teeth.filter((t) => t.incisalDown).sort((a, b) => a.cx - b.cx);
   if (up.length < 3) return null;
   const { lines } = autoLines(inp);
@@ -57,6 +63,8 @@ export function autoDesign(inp: ScreenInput): AutoDesign | null {
     { name: "Central", w: cW, h: Hc, edge: 0, top: -Hc },
   ];
   const teeth: DesignTooth[] = [];
+  const sc = scaleOf(lines.cw ? lines : { ...lines, cw: cW });
+  const mmPerPx = 1 / sc.ppm;
   let fitted = 0, ratioN = 0;
   // build from the midline outward on each side
   for (const side of ["R", "L"] as const) {
@@ -68,23 +76,31 @@ export function autoDesign(inp: ScreenInput): AutoDesign | null {
       const slot = 2 - i; // 0 central, 1 lateral, 2 canine
       const det = mine[slot];
       const fitOk = !!det && det.bw >= 0.8 * defs[i].w && det.bw <= 1.25 * defs[i].w && det.bw / Math.max(1, det.bh) >= 0.5 && det.bw / Math.max(1, det.bh) <= 1.2;
-      const d = { ...defs[i], w: fitOk ? det!.bw : defs[i].w };
+      // crown height from the colour-step gum margin on this tooth when it falls in the plausible band (box top to box top + 40% of box height)
+      let gumB: number | null = null;
+      if (fitOk && photo) {
+        const gy = gingivalTop(photo, x0 + det!.bx, det!.bw, y0 + det!.by, det!.bh);
+        if (gy !== null && gy >= y0 + det!.by - 0.02 * det!.bh && gy <= y0 + det!.by + 0.4 * det!.bh) gumB = (gy - edgeY) * cs; // vertical offset from the plane, tilt ignored
+      }
+      const base = { ...defs[i], w: fitOk ? det!.bw : defs[i].w };
+      let hh = base.h, hFrom: DesignTooth["heightFrom"] = "derived (width / 0.78)";
+      if (gumB !== null) {
+        const hd = base.edge - gumB;
+        const ratioH = hd / base.h;
+        if (ratioH >= 0.75 && ratioH <= 1.35 && base.w / hd >= 0.5 && base.w / hd <= 1.2) { hh = hd; hFrom = "gum colour step"; }
+      }
+      const d = { ...base, h: hh, top: hFrom === "gum colour step" ? base.edge - hh : base.top };
       if (fitOk) fitted++; else ratioN++;
       const src = fitOk ? ("fit" as const) : ("ratio" as const);
       const a0 = off, a1 = off + d.w; off = a1;
       const m = (a0 + a1) / 2 * sgn;
       const l = Math.min(a0, a1) * sgn, r = a1 * sgn;
       const edgeB = d.edge, topB = d.top;
-      const rad = d.w * 0.22;
-      const pts: P2[] = [];
-      // clockwise: bottom-left, bottom-right (rounded), up the right side, over the zenith, down the left side
       const lo = Math.min(l, r), hi = Math.max(l, r), wid = hi - lo;
       const zen = (i === 1 ? 0 : 0.08) * wid * sgn * -1; // central and canine zenith leans distally, lateral centred
-      pts.push(to(lo + rad, edgeB), to(hi - rad, edgeB), to(hi, edgeB - rad * 0.6));
-      pts.push(to(hi - wid * 0.04, topB + (edgeB - topB) * 0.35), to(m + wid * 0.22 + zen, topB + (edgeB - topB) * 0.05));
       const zenith = to(m + zen, topB);
-      pts.push(zenith, to(m - wid * 0.22 + zen, topB + (edgeB - topB) * 0.05), to(lo + wid * 0.04, topB + (edgeB - topB) * 0.35), to(lo, edgeB - rad * 0.6));
-      teeth.push({ name: `${d.name} ${side}`, side, poly: pts, zenith, edge: to(m, edgeB), widthRel: d.w / (cW), wh: d.w / d.h, source: src });
+      const poly = toothShape(i === 2 ? "canine" : i === 1 ? "lateral" : "central", m, wid, edgeB, topB, zen, sgn, to);
+      teeth.push({ name: `${d.name} ${side}`, side, poly, zenith, edge: to(m, edgeB), widthRel: d.w / (cW), wh: d.w / d.h, source: src, wMm: d.w * mmPerPx, hMm: d.h * mmPerPx, heightFrom: hFrom });
     }
   }
   teeth.sort((a, b) => a.edge.x - b.edge.x);
@@ -92,13 +108,37 @@ export function autoDesign(inp: ScreenInput): AutoDesign | null {
   const cRef = cws.length ? cws.reduce((a, b) => a + b, 0) / cws.length : cW;
   for (const t of teeth) t.widthRel = (t.widthRel * cW) / cRef;
   const gum = teeth.map((t) => t.zenith);
+  const gumCurve: P2[] = [];
+  teeth.forEach((t, k) => {
+    if (k > 0) { const u = teeth[k - 1]; gumCurve.push({ x: (u.edge.x + t.edge.x) / 2 - (0), y: (u.zenith.y + 0.22 * (u.edge.y - u.zenith.y) + t.zenith.y + 0.22 * (t.edge.y - t.zenith.y)) / 2 }); }
+    gumCurve.push(t.zenith);
+  });
   const all = teeth.flatMap((t) => t.poly);
   const bbox = { x0: Math.min(...all.map((p) => p.x)), y0: Math.min(...all.map((p) => p.y)), x1: Math.max(...all.map((p) => p.x)), y1: Math.max(...all.map((p) => p.y)) };
   const half = S * 0.62;
   return {
-    teeth, gum, bbox,
+    teeth, gum, gumCurve, bbox, mmPerPx, scaleTag: sc.tag, angle: ang, origin: to(0, 0),
     plane: [to(-half, 0), to(half, 0)],
     midline: [to(0, -Hc * 1.25), to(0, Hc * 0.35)],
     basis: { midline: midBasis, plane: planeBasis, span: spanBasis, nUsed: sel.length, fitted, ratio: ratioN },
   };
+}
+
+/** Tooth templates: rounded incisal corners, cervical taper, tooth-type specific incisal edge. Points are clockwise from the bottom left and joined by a smooth curve when drawn. */
+function toothShape(kind: "central" | "lateral" | "canine", m: number, w: number, edgeB: number, topB: number, zen: number, _sgn: number, to: (a: number, b: number) => P2): P2[] {
+  const h = edgeB - topB, hw = w / 2;
+  const taper = kind === "central" ? 0.3 : kind === "lateral" ? 0.36 : 0.46;
+  const half = (f: number) => hw * (1 - taper * Math.pow(f, 1.5)); // f: 0 at the edge, 1 at the zenith
+  const r = (kind === "central" ? 0.16 : 0.22) * w;
+  const P = (a: number, f: number) => to(m + a, edgeB - f * h);
+  const pts: P2[] = [];
+  if (kind === "canine") pts.push(P(-hw, 0.1), P(0, 0), P(hw, 0.1)); // cusp tip with sloping shoulders
+  else {
+    pts.push(to(m - hw + r, edgeB), to(m, edgeB), to(m + hw - r, edgeB), to(m + hw - 0.1 * r, edgeB - 0.3 * r), to(m + hw, edgeB - r));
+  }
+  for (const f of [0.35, 0.6, 0.82]) pts.push(P(half(f), f));
+  pts.push(to(m + zen + hw * 0.4, topB + h * 0.025), to(m + zen, topB), to(m + zen - hw * 0.4, topB + h * 0.025));
+  for (const f of [0.82, 0.6, 0.35]) pts.push(P(-half(f), f));
+  if (kind !== "canine") pts.push(to(m - hw, edgeB - r), to(m - hw + 0.1 * r, edgeB - 0.3 * r));
+  return pts;
 }
