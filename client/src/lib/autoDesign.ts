@@ -17,6 +17,8 @@ export interface AutoDesign {
   gumCurve: P2[];
   mmPerPx: number; scaleTag: string; scaleErrPct: number;
   angle: number; origin: P2;
+  /** incisal plane through the detected edges (only when it can differ from the reference line) */
+  tracedPlane: [P2, P2] | null;
   plane: [P2, P2];
   midline: [P2, P2];
   /** proposed changes from the measured tracing to the ideal, in mm; empty when the tracing is within the measurement error */
@@ -129,7 +131,7 @@ export function autoDesign(inp: ScreenInput, photo?: HTMLCanvasElement | null): 
   const bbox = { x0: Math.min(...all.map((p) => p.x)), y0: Math.min(...all.map((p) => p.y)), x1: Math.max(...all.map((p) => p.x)), y1: Math.max(...all.map((p) => p.y)) };
   const half = S * 0.62;
   return {
-    teeth, gum, gumCurve, bbox, mmPerPx, scaleTag: sc.tag, scaleErrPct: sc.errPct, angle: ang, origin, corrections,
+    teeth, gum, gumCurve, bbox, mmPerPx, scaleTag: sc.tag, scaleErrPct: sc.errPct, angle: ang, origin, corrections, tracedPlane: lines.inc && lines.ipl ? lines.inc : null,
     plane: [to(-half, 0), to(half, 0)],
     midline: [to(0, -Hc * 1.25), to(0, Hc * 0.35)],
     basis: { midline: midBasis, plane: planeBasis, span: spanBasis, nUsed: sel.length, fitted, ratio: 6 - fitted, arc: arcBasis, width: widthBasis },

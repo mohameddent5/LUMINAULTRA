@@ -1,6 +1,8 @@
 /** Screening measurements on synthetic landmarks. Run with `npm run test:screen`. Behaviour pins only. */
 import { summarizeFrames } from "../client/src/lib/frameStats";
 import { screen, measureLines } from "../client/src/lib/screening";
+import { autoDesign } from "../client/src/lib/autoDesign";
+import { designSvg } from "../client/src/lib/designExport";
 let failed = 0;
 const check = (n: string, ok: boolean) => { console.log(`  ${ok ? "ok  " : "FAIL"} ${n}`); if (!ok) failed++; };
 const tooth = (cx: number, bottom: number, w = 40, h = 52): any => ({ cx, cy: bottom - h / 2, bx: cx - w / 2, by: bottom - h, bw: w, bh: h, incisalDown: true });
@@ -81,6 +83,16 @@ void row;
   check("smile arc: centrals higher than canines is reverse", /^reverse/.test(cls([205, 200, 190, 190, 200, 205])));
   check("buccal corridor row is informational (ok)", get(screen({ face: f, teeth: mkT([190, 196, 200, 200, 196, 190]), region }), "buccal")?.level === "ok");
   check("no lip points: no smile arc row", !get(screen({ face: face(), teeth: teeth(), region }), "smile-arc"));
+}
+{
+  const inp: any = { face: face(), teeth: teeth(), region };
+  const d = autoDesign(inp)!;
+  const wid = (n: string) => d.teeth.filter((t) => t.name.startsWith(n)).map((t) => t.wMm);
+  check("design: left and right widths are identical (symmetric by construction)", ["Central", "Lateral", "Canine"].every((n) => Math.abs(wid(n)[0] - wid(n)[1]) < 1e-6));
+  check("design: central height gives W/H 0.78", Math.abs(d.teeth.find((t) => t.name === "Central R")!.wh - 0.78) < 0.01);
+  check("design: centrals and canines share the zenith level, laterals are lower on the screen (more incisal)", (() => { const z = (n: string) => d.teeth.find((t) => t.name === n)!.zenith.y; return Math.abs(z("Central R") - z("Canine R")) < 1 && z("Lateral R") > z("Central R"); })());
+  const svg = designSvg(d, d.mmPerPx, d.scaleTag);
+  check("svg export has the outlines, the gum line and a 10 mm scale bar", (svg.match(/<path/g) || []).length >= 7 && /10 mm/.test(svg));
 }
 check("fewer than 4 teeth: no dental values", !!get(screen({ face: null, teeth: teeth().slice(0, 3), region }), "no-teeth"));
 console.log(failed ? `screening: ${failed} FAILED` : "screening: all checks passed");

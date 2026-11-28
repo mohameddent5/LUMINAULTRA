@@ -32,6 +32,7 @@ export function ProposedDesign({ src, input, flags, muted, card }: { src: HTMLCa
       for (const s of openSegments(d.gumCurve)) g.bezierCurveTo(s.c1.x, s.c1.y, s.c2.x, s.c2.y, s.to.x, s.to.y);
       g.stroke();
       g.fillStyle = "#f472b6"; for (const p of d.gum) { g.beginPath(); g.arc(p.x, p.y, lw * 1.6, 0, 6.3); g.fill(); }
+      if (d.tracedPlane) { g.strokeStyle = "#c084fc"; g.lineWidth = lw; g.setLineDash([lw * 4, lw * 2]); g.beginPath(); g.moveTo(d.tracedPlane[0].x, d.tracedPlane[0].y); g.lineTo(d.tracedPlane[1].x, d.tracedPlane[1].y); g.stroke(); g.setLineDash([]); }
       g.strokeStyle = "#fcd34d"; g.beginPath(); g.moveTo(d.midline[0].x, d.midline[0].y); g.lineTo(d.midline[1].x, d.midline[1].y); g.stroke();
       // height arrows (zenith to edge) with mm labels, ratio under each tooth
       const fs = Math.max(7, sw / 46);
@@ -65,7 +66,7 @@ export function ProposedDesign({ src, input, flags, muted, card }: { src: HTMLCa
       </div>
       <div className="flex gap-2 mt-2">
         <button type="button" className="px-3 py-1 rounded border" data-testid="export-png" onClick={() => { const c = b.current; if (!c) return; const l = document.createElement("a"); l.download = "dsd-proposed.png"; l.href = c.toDataURL("image/png"); l.click(); }}>Save PNG (proposed)</button>
-        <button type="button" className="px-3 py-1 rounded border" data-testid="export-svg" onClick={() => { const l = document.createElement("a"); l.download = "dsd-outline.svg"; l.href = URL.createObjectURL(new Blob([designSvg(d)], { type: "image/svg+xml" })); l.click(); }}>Save outline (SVG)</button>
+        <button type="button" className="px-3 py-1 rounded border" data-testid="export-svg" onClick={() => { const l = document.createElement("a"); l.download = "dsd-outline.svg"; l.href = URL.createObjectURL(new Blob([designSvg(d, d.mmPerPx, d.scaleTag)], { type: "image/svg+xml" })); l.click(); }}>Save outline (SVG)</button>
       </div>
       <ul className={`${muted} list-disc pl-5 mt-2`}>
         <li data-testid="design-source">{d.basis.fitted} of 6 teeth were detected and compared with the ideal; {d.basis.ratio} were not found (ideal drawn anyway). Anchor: {d.basis.width}. Incisal curve: {d.basis.arc}.</li>
