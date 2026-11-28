@@ -167,7 +167,7 @@ export function measureLines(L: RefLines): Finding[] {
 }
 
 /** Automatic reference lines from the landmarks, plus whether the dental midline can be trusted. */
-export function autoLines(inp: ScreenInput): { lines: RefLines; trusted: boolean; asym: Finding | null; enough: boolean } {
+export function autoLines(inp: ScreenInput): { lines: RefLines; trusted: boolean; asym: Finding | null; enough: boolean; centrals?: ScreenTooth[] } {
   const f = inp.face || null;
   const L: RefLines = {};
   if (f) { L.ipl = f.ipl; L.mid = f.mid; L.com = f.com; L.marks = f.marks; L.irisPx = f.irisPx; }
@@ -206,7 +206,7 @@ export function autoLines(inp: ScreenInput): { lines: RefLines; trusted: boolean
       note: "From the bottom of the two central tooth boxes. Includes any plane cant, and box bottoms are rough (about 5%).",
     };
   }
-  return { lines: L, trusted, asym, enough: true };
+  return { lines: L, trusted, asym, enough: true, centrals: [A, B] };
 }
 
 export function screen(inp: ScreenInput): Finding[] {

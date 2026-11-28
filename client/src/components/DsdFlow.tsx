@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { autoLines, measureLines, type Finding, type ScreenInput } from "@/lib/screening";
+import { autoLines, measureLines, scaleOf, type Finding, type ScreenInput } from "@/lib/screening";
 import { EYE_SD_TOL_DEG, type FrameStats } from "@/lib/frameStats";
+import { gingivalTop } from "@/lib/gingival";
 import { autoDesign } from "@/lib/autoDesign";
 import { RefLinesEditor } from "./RefLinesEditor";
 import { ProposedDesign } from "./ProposedDesign";
@@ -8,13 +9,13 @@ import { ProposedDesign } from "./ProposedDesign";
 const GOAL: Record<string, string> = {
   "eye-line": "0 to 2° (level)", commissure: "parallel to eye line, within 2°", thirds: "about 100% (middle = lower third)", "lower-third": "about 1 : 2",
   midline: "dental on facial midline, under about 2 mm", "midline-angle": "parallel to facial midline, within 2°", "incisal-plane": "parallel to eye line, within 2°",
-  "gum-show": "0 to 2 ok, 2 to 3 borderline, over 3 gummy (mm)", "scale-check": "about 8 to 9.5 mm", "incisal-asym": "under 6% of central length",
+  "gum-show": "0 to 2 ok, 2 to 3 borderline, over 3 gummy (mm)", "scale-check": "about 8 to 9.5 mm", "gum-colour": "0 to 2 ok, 2 to 3 borderline, over 3 gummy (mm)", "incisal-asym": "under 6% of central length",
 };
 const SRC: Record<string, [string, string]> = {
   "eye-line": ["teaching norm", "DSD protocol (PMID 28196157)"], commissure: ["teaching norm", "PMC3010027"], thirds: ["teaching norm", "PMC3010027"], "lower-third": ["teaching norm", "PMC3010027"],
   midline: ["teaching norm", "over 2 mm is often tolerated if parallel to the facial midline (PMC6112329)"], "midline-angle": ["evidence", "cant noticed by over 90% of raters at 4 degrees (PMC3668882); our 2 degree note is a screening choice"],
   "incisal-plane": ["evidence", "cant noticed by over 90% of raters at 4 degrees (PMC3668882); our 2 degree note is a screening choice"],
-  "gum-show": ["evidence", "up to about 3 mm accepted (doi 10.1038/s41598-023-45641-y); 0 to 2 ideal is a teaching norm"], "scale-check": ["assumption", "iris 11.7 mm and central 8.5 mm are population averages"], "incisal-asym": ["teaching norm", "PMC6112329"],
+  "gum-show": ["evidence", "up to about 3 mm accepted (doi 10.1038/s41598-023-45641-y); 0 to 2 ideal is a teaching norm"], "gum-colour": ["evidence", "same gum display thresholds; estimate checked on one labelled photo only"], "scale-check": ["assumption", "iris 11.7 mm and central 8.5 mm are population averages"], "incisal-asym": ["teaching norm", "PMC6112329"],
 };
 const VERIFY: Record<string, string> = {
   "eye-line": "Retake level or confirm head position before trusting the other angles.",
@@ -47,13 +48,28 @@ function printReport(rows: Finding[], flags: string[], calibrated: boolean) {
 }
 const FLAG = { ok: ["Right", "bg-emerald-400"], note: ["Uncertain / borderline", "bg-amber-300"], check: ["Wrong (outside goal)", "bg-red-400"] } as const;
 
-function Report({ input, flags, muted, card, fs }: { fs?: FrameStats | null; input: ScreenInput; flags: string[]; muted: string; card: string }) {
+function Report({ src, input, flags, muted, card, fs }: { src: HTMLCanvasElement; fs?: FrameStats | null; input: ScreenInput; flags: string[]; muted: string; card: string }) {
   const rows = useMemo(() => {
     const a = autoLines(input);
     const f: Finding[] = [...measureLines(a.lines)];
     if (a.asym) f.push(a.asym);
     if (!a.enough) f.push({ id: "no-teeth", label: "Upper teeth", value: "n/a", level: "note", note: "Fewer than 4 upper teeth were found, so tooth-based numbers are not available." });
     else if (!a.trusted) f.push({ id: "midline-unreliable", label: "Dental midline", value: "n/a", level: "note", note: "The row found is not symmetric enough (missing, broken or merged tooth): mark by eye." });
+    if (a.centrals && a.lines.marks?.upperLip && a.lines.cw) {
+      try {
+        const tops = a.centrals.map((t) => gingivalTop(src, input.region.x0 + t.bx, t.bw, input.region.y0 + t.by, t.bh)).filter((v): v is number => v !== null);
+        if (tops.length === 2) {
+          const sc = scaleOf(a.lines), top = (tops[0] + tops[1]) / 2, g2 = (top - a.lines.marks.upperLip.y) / sc.ppm;
+          const box = f.find((x) => x.id === "gum-show");
+          const g1 = box && a.lines.ctop !== undefined ? (a.lines.ctop - a.lines.marks.upperLip.y) / sc.ppm : null;
+          const diff = g1 === null ? null : Math.abs(g1 - g2);
+          const r1 = (v: number) => Math.round(v * 10) / 10;
+          f.push({ id: "gum-colour", label: "Gum show, colour-step estimate (cross-check)", value: g2 <= 0 ? "none" : `${r1(g2)} mm`, level: g2 > 3 ? "check" : g2 > 2 ? "note" : "ok",
+            note: `Finds where the gum colour changes to tooth down the middle of each central. On the one hand-labelled photo it was off by 8 to 9% of tooth height (box top: 16%), a single photo, so it is a cross-check, not the headline. ${diff !== null ? `Differs from the box-top figure by ${r1(diff)} mm.` : ""}` });
+          if (box && diff !== null && diff > 1.5) { box.note += ` The colour-step estimate disagrees by ${r1(diff)} mm: check by eye.`; if (box.level === "ok") box.level = "note"; }
+        }
+      } catch { /* pixel read failed: cross-check skipped */ }
+    }
     if (fs) {
       const r1 = (v: number) => Math.round(v * 10) / 10;
       const bad = fs.eye.sd > EYE_SD_TOL_DEG || fs.com.sd > EYE_SD_TOL_DEG;
@@ -111,7 +127,7 @@ export function DsdFlow({ frameStats, src, input, flags, caseKey, muted, card }:
       </div>
       <div hidden={step !== "trace"}><RefLinesEditor src={src} input={input} caseKey={caseKey} muted={muted} card={card} /></div>
       <div hidden={step !== "design"}><ProposedDesign src={src} input={input} flags={flags} muted={muted} card={box} /></div>
-      <div hidden={step !== "report"}><Report fs={frameStats} input={input} flags={flags} muted={muted} card={box} /></div>
+      <div hidden={step !== "report"}><Report src={src} fs={frameStats} input={input} flags={flags} muted={muted} card={box} /></div>
     </div>
   );
 }
