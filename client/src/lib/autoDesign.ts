@@ -6,13 +6,13 @@ import { autoLines, type P2, type ScreenInput } from "./screening";
  * height = width / 0.78, laterals 7% shorter at the edge with their gum zenith 8% lower than the centrals.
  * Output is in canvas pixels, ready to draw.
  */
-export interface DesignTooth { name: string; side: "R" | "L"; poly: P2[]; zenith: P2; edge: P2; widthRel: number; wh: number }
+export interface DesignTooth { name: string; side: "R" | "L"; poly: P2[]; zenith: P2; edge: P2; widthRel: number; wh: number; source: "fit" | "ratio" }
 export interface AutoDesign {
   teeth: DesignTooth[];
   gum: P2[]; // zeniths left to right
   plane: [P2, P2];
   midline: [P2, P2];
-  basis: { midline: string; plane: string; span: string; nUsed: number };
+  basis: { midline: string; plane: string; span: string; nUsed: number; fitted: number; ratio: number };
   bbox: { x0: number; y0: number; x1: number; y1: number };
 }
 
@@ -56,12 +56,20 @@ export function autoDesign(inp: ScreenInput): AutoDesign | null {
     { name: "Central", w: cW, h: Hc, edge: 0, top: -Hc },
   ];
   const teeth: DesignTooth[] = [];
+  let fitted = 0, ratioN = 0;
   // build from the midline outward on each side
   for (const side of ["R", "L"] as const) {
     const sgn = side === "R" ? -1 : 1; // patient's right is image left
     let off = 0;
+    // detected teeth on this side, nearest the midline first (patient's right = image left)
+    const mine = sel.filter((t) => (side === "R" ? x0 + t.cx < midX : x0 + t.cx >= midX)).sort((a, b) => Math.abs(x0 + a.cx - midX) - Math.abs(x0 + b.cx - midX));
     for (let i = 2; i >= 0; i--) {
-      const d = defs[i];
+      const slot = 2 - i; // 0 central, 1 lateral, 2 canine
+      const det = mine[slot];
+      const fitOk = !!det && det.bw >= 0.8 * defs[i].w && det.bw <= 1.25 * defs[i].w && det.bw / Math.max(1, det.bh) >= 0.5 && det.bw / Math.max(1, det.bh) <= 1.2;
+      const d = { ...defs[i], w: fitOk ? det!.bw : defs[i].w };
+      if (fitOk) fitted++; else ratioN++;
+      const src = fitOk ? ("fit" as const) : ("ratio" as const);
       const a0 = off, a1 = off + d.w; off = a1;
       const m = (a0 + a1) / 2 * sgn;
       const l = Math.min(a0, a1) * sgn, r = a1 * sgn;
@@ -75,10 +83,13 @@ export function autoDesign(inp: ScreenInput): AutoDesign | null {
       pts.push(to(hi - wid * 0.04, topB + (edgeB - topB) * 0.35), to(m + wid * 0.22 + zen, topB + (edgeB - topB) * 0.05));
       const zenith = to(m + zen, topB);
       pts.push(zenith, to(m - wid * 0.22 + zen, topB + (edgeB - topB) * 0.05), to(lo + wid * 0.04, topB + (edgeB - topB) * 0.35), to(lo, edgeB - rad * 0.6));
-      teeth.push({ name: `${d.name} ${side}`, side, poly: pts, zenith, edge: to(m, edgeB), widthRel: d.w / cW, wh: d.w / d.h });
+      teeth.push({ name: `${d.name} ${side}`, side, poly: pts, zenith, edge: to(m, edgeB), widthRel: d.w / (cW), wh: d.w / d.h, source: src });
     }
   }
   teeth.sort((a, b) => a.edge.x - b.edge.x);
+  const cws = teeth.filter((t) => t.name.startsWith("Central")).map((t) => t.widthRel * cW);
+  const cRef = cws.length ? cws.reduce((a, b) => a + b, 0) / cws.length : cW;
+  for (const t of teeth) t.widthRel = (t.widthRel * cW) / cRef;
   const gum = teeth.map((t) => t.zenith);
   const all = teeth.flatMap((t) => t.poly);
   const bbox = { x0: Math.min(...all.map((p) => p.x)), y0: Math.min(...all.map((p) => p.y)), x1: Math.max(...all.map((p) => p.x)), y1: Math.max(...all.map((p) => p.y)) };
@@ -87,6 +98,6 @@ export function autoDesign(inp: ScreenInput): AutoDesign | null {
     teeth, gum, bbox,
     plane: [to(-half, 0), to(half, 0)],
     midline: [to(0, -Hc * 1.25), to(0, Hc * 0.35)],
-    basis: { midline: midBasis, plane: planeBasis, span: spanBasis, nUsed: sel.length },
+    basis: { midline: midBasis, plane: planeBasis, span: spanBasis, nUsed: sel.length, fitted, ratio: ratioN },
   };
 }
