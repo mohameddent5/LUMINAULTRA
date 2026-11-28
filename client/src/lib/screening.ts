@@ -8,7 +8,7 @@
 export type P2 = { x: number; y: number };
 export interface ScreenTooth { cx: number; cy: number; bx: number; by: number; bw: number; bh: number; incisalDown: boolean }
 export interface ScreenInput {
-  face?: { ipl: [P2, P2]; mid: [P2, P2]; com: [P2, P2]; marks?: { glabella: P2; subnasale: P2; stomion: P2; menton: P2; upperLip?: P2 } } | null;
+  face?: { irisPx?: number; ipl: [P2, P2]; mid: [P2, P2]; com: [P2, P2]; marks?: { glabella: P2; subnasale: P2; stomion: P2; menton: P2; upperLip?: P2 } } | null;
   /** tooth boxes in region coordinates; region.x0 and y0 convert them to canvas pixels */
   teeth: ScreenTooth[];
   region: { x0: number; y0: number };
@@ -26,6 +26,18 @@ export interface Finding {
 
 /** assumed width of an upper central incisor, only used to turn a ratio into an approximate mm figure */
 export const CENTRAL_WIDTH_MM = 8.5;
+/** mean horizontal visible iris diameter in adults, about 11.7 mm (individual spread about 5 to 6%) */
+export const IRIS_MM = 11.7;
+
+/** Which scale to use for mm: the dentist's own width, else the iris (if the implied central width is plausible), else the assumed width. */
+export function scaleOf(L: RefLines): { ppm: number; tag: "calibrated" | "iris" | "assumed"; errPct: number; text: string } {
+  if (L.pxPerMm) return { ppm: L.pxPerMm, tag: "calibrated", errPct: 5, text: "calibrated on the entered central width" };
+  if (L.irisPx && L.cw) {
+    const ppm = L.irisPx / IRIS_MM, cwMm = L.cw / ppm;
+    if (cwMm >= 6.5 && cwMm <= 11) return { ppm, tag: "iris", errPct: 12, text: `scaled from the iris (${IRIS_MM} mm average, about 12% error incl. depth difference between eye and teeth)` };
+  }
+  return { ppm: (L.cw || 1) / CENTRAL_WIDTH_MM, tag: "assumed", errPct: 20, text: `scaled by assuming a ${CENTRAL_WIDTH_MM} mm central incisor (about 20% error)` };
+}
 
 const ang = (a: P2, b: P2) => (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -34,6 +46,8 @@ const side = (dx: number) => (dx > 0 ? "patient's left" : "patient's right");
 export interface RefLines {
   /** facial thirds landmarks (face mesh) */
   marks?: { glabella: P2; subnasale: P2; stomion: P2; menton: P2; upperLip?: P2 };
+  /** iris diameter in pixels (face mesh), the automatic scale */
+  irisPx?: number;
   ipl?: [P2, P2];
   mid?: [P2, P2];
   com?: [P2, P2];
@@ -91,10 +105,11 @@ export function measureLines(L: RefLines): Finding[] {
     const t = q.y === p.y ? 0 : (my - p.y) / (q.y - p.y);
     const dx = mx - (p.x + t * (q.x - p.x));
     const ratio = Math.abs(dx) / Math.max(1, L.cw);
-    const mm = L.pxPerMm ? Math.abs(dx) / L.pxPerMm : ratio * CENTRAL_WIDTH_MM;
+    const sc = scaleOf(L);
+    const mm = Math.abs(dx) / sc.ppm;
     out.push({
       id: "midline", label: "Dental midline vs facial midline",
-      value: `${r1(ratio * 100)}% of central width (${L.pxPerMm ? "" : "about "}${r1(mm)} mm${L.pxPerMm ? ", calibrated" : `, assuming ${CENTRAL_WIDTH_MM} mm`}) toward ${side(dx)}`,
+      value: `${r1(ratio * 100)}% of central width (${sc.tag === "calibrated" ? "" : "about "}${r1(mm)} mm, ${sc.tag}) toward ${side(dx)}`,
       level: ratio > 0.35 ? "check" : ratio > 0.2 ? "note" : "ok",
       note: "Dental midline is the gap found between the two central teeth boxes; facial midline is the nose-bridge to chin line. Box edges are rough (about 5 to 10% of a central width); the mm figure is an estimate unless calibrated.",
     });
@@ -114,10 +129,19 @@ export function measureLines(L: RefLines): Finding[] {
       note: "Line through the incisal edge points of the front upper teeth. Edge points come from the tooth boxes and a curved arch tilts the fit a little, so about 2 to 3° error. The occlusal plane itself needs a profile or an intraoral view.",
     });
   }
+  if (L.irisPx && L.cw && !L.pxPerMm) {
+    const cwMm = L.cw / (L.irisPx / IRIS_MM);
+    const bad = cwMm < 6.5 || cwMm > 11;
+    out.push({
+      id: "scale-check", label: "Scale cross-check: central width implied by the iris", value: bad ? `${r1(cwMm)} mm (not plausible, mm values use the assumed width)` : `${r1(cwMm)} mm`,
+      level: bad ? "check" : cwMm < 7.5 || cwMm > 10 ? "note" : "ok",
+      note: "Independent of the tooth boxes: the iris (about 11.7 mm) gives a scale, and an upper central is normally about 8 to 9.5 mm wide. A value far outside means the tooth box or the iris reading is off, so mm figures are unreliable.",
+    });
+  }
   if (L.marks?.upperLip && L.ctop !== undefined && L.cw) {
-    const ppm = L.pxPerMm || L.cw / CENTRAL_WIDTH_MM;
+    const sc = scaleOf(L), ppm = sc.ppm;
     const gum = (L.ctop - L.marks.upperLip.y) / ppm;
-    const cal = L.pxPerMm ? "calibrated on the entered central width" : `scaled by assuming a ${CENTRAL_WIDTH_MM} mm central incisor`;
+    const cal = sc.text;
     out.push({
       id: "gum-show", label: "Gum show at this smile (upper lip edge to top of the central teeth)", value: gum <= 0 ? `none (lip covers about ${r1(-gum)} mm of crown)` : `${r1(gum)} mm`,
       level: gum > 3 ? "check" : gum > 2 ? "note" : "ok",
@@ -131,7 +155,7 @@ export function measureLines(L: RefLines): Finding[] {
 export function autoLines(inp: ScreenInput): { lines: RefLines; trusted: boolean; asym: Finding | null; enough: boolean } {
   const f = inp.face || null;
   const L: RefLines = {};
-  if (f) { L.ipl = f.ipl; L.mid = f.mid; L.com = f.com; L.marks = f.marks; }
+  if (f) { L.ipl = f.ipl; L.mid = f.mid; L.com = f.com; L.marks = f.marks; L.irisPx = f.irisPx; }
   const up = inp.teeth.filter((t) => t.incisalDown).sort((a, b) => a.cx - b.cx);
   if (up.length < 4) return { lines: L, trusted: false, asym: null, enough: false };
   const med = up.reduce((s, t) => s + t.cx, 0) / up.length;

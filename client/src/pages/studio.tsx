@@ -342,6 +342,7 @@ type FaceGuides = {
   midOffsetPct: number; // mouth centre vs facial midline, % of mouth width (+ = patient's left)
   /** landmark points for the facial thirds */
   marks?: { glabella: Pt; subnasale: Pt; stomion: Pt; menton: Pt; upperLip?: Pt };
+  irisPx?: number;
 };
 
 function faceGuides(f: { x: number; y: number }[], w: number, h: number): FaceGuides {
@@ -370,6 +371,7 @@ function faceGuides(f: { x: number; y: number }[], w: number, h: number): FaceGu
     mid: [brow, chin],
     com: [cL, cR],
     lipMid,
+    irisPx: f.length > 477 ? (Math.hypot(P(469).x - P(471).x, P(469).y - P(471).y) + Math.hypot(P(474).x - P(476).x, P(474).y - P(476).y)) / 2 : undefined,
     marks: { glabella: P(9), subnasale: P(2), stomion: lipMid, menton: chin, upperLip: P(13) },
     comCantDeg: comAng - iplAng,
     midOffsetPct: (sign * Math.hypot(lipMid.x - foot.x, lipMid.y - foot.y) * 100) / mouthW,

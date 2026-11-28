@@ -7,7 +7,7 @@ import { ProposedDesign } from "./ProposedDesign";
 const GOAL: Record<string, string> = {
   "eye-line": "0 to 2° (level)", commissure: "parallel to eye line, within 2°", thirds: "about 100% (middle = lower third)", "lower-third": "about 1 : 2",
   midline: "dental on facial midline, under about 2 mm", "midline-angle": "parallel to facial midline, within 2°", "incisal-plane": "parallel to eye line, within 2°",
-  "gum-show": "0 to 2 mm (above 3 mm = gummy)", "incisal-asym": "under 6% of central length",
+  "gum-show": "0 to 2 mm (above 3 mm = gummy)", "scale-check": "about 8 to 9.5 mm", "incisal-asym": "under 6% of central length",
 };
 const VERIFY: Record<string, string> = {
   "eye-line": "Retake level or confirm head position before trusting the other angles.",
