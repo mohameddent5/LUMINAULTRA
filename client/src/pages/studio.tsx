@@ -1660,43 +1660,49 @@ export default function Studio() {
     c.width = W;
     c.height = H;
     const x = c.getContext("2d")!;
+    const rtl = lang === "ar"; // Arabic report: right-aligned, right-to-left canvas text. English stays the default and is unchanged.
+    const L = (en: string, ar: string) => (rtl ? ar : en);
+    const ax = (px: number) => (rtl ? W - px : px);
+    const align = () => { x.direction = rtl ? "rtl" : "ltr"; x.textAlign = rtl ? "right" : "left"; };
+    align();
     x.fillStyle = "#ffffff";
     x.fillRect(0, 0, W, H);
     x.fillStyle = "#0b1220";
     x.fillRect(0, 0, W, 170);
     x.fillStyle = "#ffffff";
     x.font = "bold 54px sans-serif";
-    x.fillText("Your smile preview", M, 85);
+    x.fillText(L("Your smile preview", "معاينة ابتسامتك"), ax(M), 85);
     x.font = "28px sans-serif";
     x.fillStyle = "#67e8f9";
     const clinic = clinicName();
-    x.fillText(`${clinic || "Dental clinic"}  |  ${new Date().toLocaleDateString()}`, M, 135);
+    x.fillText(`${clinic || L("Dental clinic", "عيادة الأسنان")}  |  ${new Date().toLocaleDateString(rtl ? "ar-EG" : undefined)}`, ax(M), 135);
     x.fillStyle = "#0f172a";
     x.font = "bold 34px sans-serif";
-    x.fillText(name.trim() || "Patient", M, 235);
+    x.fillText(name.trim() || L("Patient", "المريض"), ax(M), 235);
 
     const iw = (W - M * 2 - 30) / 2;
     const ih = 470;
-    coverDraw(x, o, o.width, o.height, M, 265, iw, ih);
-    coverDraw(x, a, a.width, a.height, M + iw + 30, 265, iw, ih);
+    coverDraw(x, o, o.width, o.height, rtl ? M + iw + 30 : M, 265, iw, ih); // Arabic reads right to left: before on the right
+    coverDraw(x, a, a.width, a.height, rtl ? M : M + iw + 30, 265, iw, ih);
     x.font = "bold 26px sans-serif";
     x.fillStyle = "#ffffff";
-    x.fillRect(M + 14, 279, 120, 40);
-    x.fillRect(M + iw + 44, 279, 100, 40);
+    const bx0 = rtl ? M + iw + 30 + 14 : M + 14, ax0 = rtl ? M + 14 : M + iw + 44;
+    x.fillRect(bx0, 279, 120, 40);
+    x.fillRect(ax0, 279, 100, 40);
     x.fillStyle = "#0f172a";
-    x.fillText("Before", M + 26, 308);
-    x.fillText("After", M + iw + 58, 308);
+    if (rtl) { x.textAlign = "center"; x.fillText("قبل", bx0 + 60, 308); x.fillText("بعد", ax0 + 50, 308); align(); }
+    else { x.fillText("Before", M + 26, 308); x.fillText("After", M + iw + 58, 308); }
 
     let y = 265 + ih + 50;
     const optImgs: [string, string | undefined][] = [
-      ["Whitening", thumbs.whiten],
-      ["Bonding", thumbs.bonding],
-      ["Veneers style", thumbs.veneers],
+      [L("Whitening", "تبييض"), thumbs.whiten],
+      [L("Bonding", "ترميم بالحشو التجميلي"), thumbs.bonding],
+      [L("Veneers style", "نمط القشور"), thumbs.veneers],
     ];
     if (thumbs.bonding && thumbs.veneers) {
       x.fillStyle = "#0f172a";
       x.font = "bold 30px sans-serif";
-      x.fillText("Options we can discuss", M, y);
+      x.fillText(L("Options we can discuss", "خيارات يمكننا مناقشتها"), ax(M), y);
       y += 24;
       const ow = (W - M * 2 - 40) / 3;
       const oh = 250;
@@ -1704,28 +1710,29 @@ export default function Studio() {
         const [label, src] = optImgs[i];
         if (!src) continue;
         const im = await loadImage(src);
-        coverDraw(x, im, im.width, im.height, M + i * (ow + 20), y, ow, oh);
+        const col = rtl ? 2 - i : i;
+        coverDraw(x, im, im.width, im.height, M + col * (ow + 20), y, ow, oh);
         x.fillStyle = "#0f172a";
         x.font = "bold 24px sans-serif";
-        x.fillText(label, M + i * (ow + 20), y + oh + 34);
+        x.fillText(label, M + col * (ow + 20) + (rtl ? ow : 0), y + oh + 34);
       }
       y += 250 + 80;
     }
 
     x.fillStyle = "#0f172a";
     x.font = "bold 30px sans-serif";
-    x.fillText("What we see", M, y);
+    x.fillText(L("What we see", "ما نراه"), ax(M), y);
     y += 40;
     x.font = "26px sans-serif";
     x.fillStyle = "#334155";
-    for (const n of notes) y = wrap(x, "• " + n, M, y, W - M * 2, 36);
+    for (const n of notes) y = wrap(x, "• " + n, ax(M), y, W - M * 2, 36);
 
     // record box
     const by = Math.max(y + 30, 1230);
     const flagLine = engine && bracesSuspected(engine)
-      ? "Flag for the dentist: braces or brackets look present, outlines are less reliable."
+      ? L("Flag for the dentist: braces or brackets look present, outlines are less reliable.", "تنبيه للطبيب: يبدو أن هناك تقويماً أو حاصرات على الأسنان، والمحيطات عليها أقل موثوقية.")
       : engine && lesionFlags(engine).length
-        ? `Flag for the dentist: colour prompt on ${lesionFlags(engine).length} ${lesionFlags(engine).length === 1 ? "tooth" : "teeth"} (possible decay or stain), not a diagnosis.`
+        ? L(`Flag for the dentist: colour prompt on ${lesionFlags(engine).length} ${lesionFlags(engine).length === 1 ? "tooth" : "teeth"} (possible decay or stain), not a diagnosis.`, `تنبيه للطبيب: إشارة لونية على ${lesionFlags(engine).length} ${lesionFlags(engine).length === 1 ? "سن" : "أسنان"} (تسوس محتمل أو تصبغ)، وليست تشخيصاً.`)
         : "";
     x.fillStyle = "#f1f5f9";
     x.beginPath();
@@ -1733,11 +1740,19 @@ export default function Studio() {
     x.fill();
     x.fillStyle = "#0f172a";
     x.font = "bold 28px sans-serif";
-    x.fillText("Case record", M + 28, by + 48);
+    x.fillText(L("Case record", "سجل الحالة"), ax(M + 28), by + 48);
     x.font = "24px sans-serif";
     x.fillStyle = "#334155";
-    const used = [smooth && "smooth edges", straighten && "straighten", balance && "balance sizes", enamel && "natural depth", Object.keys(edits).length ? "tooth adjustments" : ""].filter(Boolean).join(", ") || "whitening only";
-    const lines = [
+    const used = (rtl ? [smooth && "تنعيم الحواف", straighten && "تعديل الميلان", balance && "موازنة الأحجام", enamel && "عمق طبيعي", Object.keys(edits).length ? "تعديلات على الأسنان" : ""] : [smooth && "smooth edges", straighten && "straighten", balance && "balance sizes", enamel && "natural depth", Object.keys(edits).length ? "tooth adjustments" : ""]).filter(Boolean).join(rtl ? "، " : ", ") || L("whitening only", "تبييض فقط");
+    const consentDate = consentAt.current ? new Date(consentAt.current).toLocaleString("ar-EG") : "";
+    const lines = rtl ? [
+      `الموافقة: أكد الطبيب موافقة المريض${consentDate ? " بتاريخ " + consentDate : ""}`,
+      `التقاط الصورة: ${quality?.acceptable ? "اجتازت كل الفحوص" : "لم تجتز كل الفحوص، اعتبرها فكرة تقريبية"}. ثقة المعاينة ${tier}.`,
+      `أدوات الشكل: ${shapeOk ? "متاحة لهذه الصورة" : engine && bracesSuspected(engine) ? "غير متاحة، توجد تقويمات أو حاصرات" : "غير متاحة، الصورة غير واضحة بما يكفي لإعادة تشكيل الأسنان بأمانة"}.`,
+      ...(flagLine ? [flagLine] : []),
+      `التعديلات المطبقة: ${used}. مستوى التبييض: ${levelWord}.`,
+      `رقم الحالة ${caseId || "-"} | استوديو الابتسامة | مصدر الصورة: ${sourceRef.current}`,
+    ] : [
       `Consent: patient agreement confirmed by the dentist${consentAt.current ? " on " + new Date(consentAt.current).toLocaleString() : ""}`,
       `Photo capture: ${quality?.acceptable ? "passed all checks" : "did not pass all checks, treat as a rough idea"}. Preview confidence ${tier}.`,
       `Shape tools: ${shapeOk ? "available for this photo" : engine && bracesSuspected(engine) ? "not offered, braces or brackets are present" : "not offered, the photo was not clear enough to reshape teeth honestly"}.`,
@@ -1746,11 +1761,11 @@ export default function Studio() {
       `Case ID ${caseId || "-"} | Smile Studio engine 1 | Photo source: ${sourceRef.current}`,
     ];
     let ly = by + 88;
-    for (const l of lines) ly = wrap(x, l, M + 28, ly, W - M * 2 - 56, 34);
+    for (const l of lines) ly = wrap(x, l, ax(M + 28), ly, W - M * 2 - 56, 34);
 
     x.fillStyle = "#64748b";
     x.font = "22px sans-serif";
-    wrap(x, "This is a visual preview made by software to help a conversation with your dentist. It is not a diagnosis and does not guarantee the final result. Your dentist reviews every result.", M, H - 100, W - M * 2, 30);
+    wrap(x, L("This is a visual preview made by software to help a conversation with your dentist. It is not a diagnosis and does not guarantee the final result. Your dentist reviews every result.", "هذه معاينة مرئية أعدّها برنامج لمساعدتك في الحوار مع طبيبك. وهي ليست تشخيصاً ولا تضمن النتيجة النهائية. يراجع طبيبك كل نتيجة."), ax(M), H - 100, W - M * 2, 30);
     return c;
   };
 

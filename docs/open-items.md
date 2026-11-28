@@ -10,5 +10,5 @@ Rules that apply to every item: held-out scoring first, fixed no-regression tabl
 6. Spacing thresholds (30% spacing, 70% missing tooth) are geometry rules with no validation claim.
 7. Database: waits on a fresh isolated Postgres (docs/DEPLOY.md). Release blocker: old credential must be confirmed revoked.
 8. Docs and tests: keep docs/scoring-protocol.md and the unit suites current.
-9. Patient PDF report is English only (canvas text is hard-coded). Arabic mode translates the app but not the report. Needs right-to-left canvas text and a native read of the wording.
+9. Patient PDF report: Arabic version built (right-to-left canvas, mirrored before/after and option order); English stays the default and is unchanged. The Arabic wording needs a native read.
 10. Arabic wording was written by the build agent, not a native reviewer: one read by Mohamed needed (about 65 strings, see the commit "Arabic: translate 61 UI strings").
