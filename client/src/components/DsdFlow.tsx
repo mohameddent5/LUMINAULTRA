@@ -9,13 +9,13 @@ import { ProposedDesign } from "./ProposedDesign";
 const GOAL: Record<string, string> = {
   "eye-line": "0 to 2° (level)", commissure: "parallel to eye line, within 2°", thirds: "about 100% (middle = lower third)", "lower-third": "about 1 : 2",
   midline: "dental on facial midline, under about 2 mm", "midline-angle": "parallel to facial midline, within 2°", "incisal-plane": "parallel to eye line, within 2°",
-  "gum-show": "0 to 2 ok, 2 to 3 borderline, over 3 gummy (mm)", "scale-check": "about 8 to 9.5 mm", "gum-colour": "0 to 2 ok, 2 to 3 borderline, over 3 gummy (mm)", "incisal-asym": "under 6% of central length",
+  "gum-show": "0 to 2 ok, 2 to 3 borderline, over 3 gummy (mm)", "scale-check": "about 8 to 9.5 mm", "gum-box": "0 to 2 ok, 2 to 3 borderline, over 3 gummy (mm)", "gum-colour": "0 to 2 ok, 2 to 3 borderline, over 3 gummy (mm)", "incisal-asym": "under 6% of central length",
 };
 const SRC: Record<string, [string, string]> = {
   "eye-line": ["teaching norm", "DSD protocol (PMID 28196157)"], commissure: ["teaching norm", "PMC3010027"], thirds: ["teaching norm", "PMC3010027"], "lower-third": ["teaching norm", "PMC3010027"],
   midline: ["teaching norm", "over 2 mm is often tolerated if parallel to the facial midline (PMC6112329)"], "midline-angle": ["evidence", "cant noticed by over 90% of raters at 4 degrees (PMC3668882); our 2 degree note is a screening choice"],
   "incisal-plane": ["evidence", "cant noticed by over 90% of raters at 4 degrees (PMC3668882); our 2 degree note is a screening choice"],
-  "gum-show": ["evidence", "up to about 3 mm accepted (doi 10.1038/s41598-023-45641-y); 0 to 2 ideal is a teaching norm"], "gum-colour": ["evidence", "same gum display thresholds; estimate checked on one labelled photo only"], "scale-check": ["assumption", "iris 11.7 mm and central 8.5 mm are population averages"], "incisal-asym": ["teaching norm", "PMC6112329"],
+  "gum-show": ["evidence", "up to about 3 mm accepted (doi 10.1038/s41598-023-45641-y); 0 to 2 ideal is a teaching norm"], "gum-box": ["evidence", "same thresholds; box top tends to read high"], "gum-colour": ["evidence", "same gum display thresholds; estimate checked on one labelled photo only"], "scale-check": ["assumption", "iris 11.7 mm and central 8.5 mm are population averages"], "incisal-asym": ["teaching norm", "PMC6112329"],
 };
 const VERIFY: Record<string, string> = {
   "eye-line": "Retake level or confirm head position before trusting the other angles.",
@@ -64,9 +64,18 @@ function Report({ src, input, flags, muted, card, fs }: { src: HTMLCanvasElement
           const g1 = box && a.lines.ctop !== undefined ? (a.lines.ctop - a.lines.marks.upperLip.y) / sc.ppm : null;
           const diff = g1 === null ? null : Math.abs(g1 - g2);
           const r1 = (v: number) => Math.round(v * 10) / 10;
-          f.push({ id: "gum-colour", label: "Gum show, colour-step estimate (cross-check)", value: g2 <= 0 ? "none" : `${r1(g2)} mm`, level: g2 > 3 ? "check" : g2 > 2 ? "note" : "ok",
-            note: `Finds where the gum colour changes to tooth down the middle of each central. On the one hand-labelled photo it was off by 8 to 9% of tooth height (box top: 16%), a single photo, so it is a cross-check, not the headline. ${diff !== null ? `Differs from the box-top figure by ${r1(diff)} mm.` : ""}` });
-          if (box && diff !== null && diff > 1.5) { box.note += ` The colour-step estimate disagrees by ${r1(diff)} mm: check by eye.`; if (box.level === "ok") box.level = "note"; }
+          const ok = g1 !== null && a.centrals.every((t, k) => tops[k] >= input.region.y0 + t.by - 1 && tops[k] <= input.region.y0 + t.by + 0.4 * t.bh);
+          const lvl = (g: number): "ok" | "note" | "check" => (g > 3 ? "check" : g > 2 ? "note" : "ok");
+          const show = (g: number) => (g <= 0 ? "none" : `${r1(g)} mm`);
+          if (box && ok && g1 !== null) {
+            f.push({ id: "gum-box", label: "Gum show, tooth-box-top estimate (cross-check)", value: show(g1), level: lvl(g1), note: "Uses the top of the tooth box as the gingival margin. On the labelled photo (ex6) this sat about 16% of the box height too high, so it tends to read high." });
+            box.label = "Gum show at this smile (lip edge to gingival margin, colour-step estimate)";
+            box.value = show(g2); box.level = lvl(g2);
+            box.note = `Estimated. The gingival margin is where the gum colour changes to tooth down the middle of each central; on the one hand-labelled photo (ex6, 7 teeth) it was off by a median 8% of tooth height versus 16% for the box top (tuned on that same photo, no leave-one-out possible). Lip edge from the face mesh; ${sc.text}. Box-top estimate: ${show(g1)}${diff !== null && diff > 1.5 ? `. The two differ by ${r1(diff)} mm: check by eye.` : "."} Valid only for a natural posed smile.`;
+            if (diff !== null && diff > 1.5 && box.level === "ok") box.level = "note";
+          } else {
+            f.push({ id: "gum-colour", label: "Gum show, colour-step estimate (cross-check)", value: show(g2), level: lvl(g2), note: "The colour step fell outside the tooth box range, so the box-top figure stays as the headline." });
+          }
         }
       } catch { /* pixel read failed: cross-check skipped */ }
     }
