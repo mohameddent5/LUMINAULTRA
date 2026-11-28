@@ -78,7 +78,8 @@ export function RefLinesEditor({ src, input, caseKey, muted, card }: { src: HTML
         g.fillRect(cxp - t.bw / 2 + 1, yb + 3, t.bw - 2, (two ? 2 : 1) * f2 + 4);
         g.fillStyle = Math.abs(wh - 0.75) > 0.12 ? "#fcd34d" : "#e2e8f0";
         g.fillText(w1, cxp, yb + 3 + f2);
-        if (two) g.fillText(`W/H ${Math.round(wh * 100)}%`, cxp, yb + 3 + 2 * f2);
+        const odd = wh < 0.5 || wh > 1.15; // box is probably merged, split or includes gum: not a usable ratio
+        if (odd) { g.fillStyle = "#f87171"; g.fillText("check by eye", cxp, yb + 3 + (two ? 2 : 1) * f2 + (two ? 0 : f2)); } else if (two) g.fillText(`W/H ${Math.round(wh * 100)}%`, cxp, yb + 3 + 2 * f2);
       }
     }
   }, [lines, src, showW, mm]); // eslint-disable-line react-hooks/exhaustive-deps
