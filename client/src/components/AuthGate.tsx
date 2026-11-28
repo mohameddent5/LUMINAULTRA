@@ -49,6 +49,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     } finally { setBusy(false); }
   };
 
+  const [tempHidden, setTempHidden] = useState(() => sessionStorage.getItem("tempStoreHidden") === "1");
   const signOut = async () => {
     await flushPending();
     await api("POST", "/api/auth/logout", {}).catch(() => {});
@@ -61,9 +62,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return (
       <>
         {children}
-        {tempStore && !syncBad && (
-          <div data-testid="temp-store" className="fixed bottom-3 left-3 z-[100] rounded bg-amber-900/90 text-amber-100 text-xs px-3 py-2">
-            This server has no database connected, so saved cases are kept in this browser and in server memory only. A server restart loses the server copy, and clearing this browser loses the browser copy. There is no backup yet.
+        {tempStore && !syncBad && !tempHidden && (
+          <div data-testid="temp-store" role="status" className="fixed bottom-3 left-3 right-3 sm:right-auto sm:max-w-md z-[100] rounded bg-amber-900/95 text-amber-100 text-xs px-3 py-2 flex items-start gap-3">
+            <span>This server has no database connected, so saved cases are kept in this browser and in server memory only. A server restart loses the server copy, and clearing this browser loses the browser copy. There is no backup yet.</span>
+            <button type="button" aria-label="Dismiss this notice" onClick={() => { sessionStorage.setItem("tempStoreHidden", "1"); setTempHidden(true); }} className="shrink-0 underline">Got it</button>
           </div>
         )}
         {syncBad && (
