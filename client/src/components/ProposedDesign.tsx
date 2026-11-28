@@ -39,7 +39,7 @@ export function ProposedDesign({ src, input, flags, muted, card }: { src: HTMLCa
       for (const t of d.teeth) {
         g.strokeStyle = "rgba(255,255,255,0.9)"; g.lineWidth = lw * 0.8; g.beginPath(); g.moveTo(t.zenith.x, t.zenith.y + lw * 2); g.lineTo(t.edge.x, t.edge.y - lw * 2); g.stroke();
         const lx = t.zenith.x, ly = (t.zenith.y + t.edge.y) / 2;
-        const tag = t.heightFrom === "gum colour step" ? "" : "*";
+        const tag = "";
         g.fillStyle = "#fff"; g.strokeStyle = "rgba(15,23,42,0.85)"; g.lineWidth = lw * 2;
         const hs = `${t.hMm.toFixed(1)}${tag}`, ws = `${t.wMm.toFixed(1)}`;
         g.strokeText(hs, lx, ly); g.fillText(hs, lx, ly);
@@ -53,19 +53,24 @@ export function ProposedDesign({ src, input, flags, muted, card }: { src: HTMLCa
   return (
     <section className={card} data-testid="proposed-design">
       <h3 className="text-xl font-semibold">Proposed design (automatic, for the dentist)</h3>
-      <p className={muted}>Left: the photo as taken. Right: proposed outlines for the six upper front teeth, gingival zenith line (pink), incisal plane (blue) and midline (yellow). On each tooth: crown height in mm (an asterisk means derived from the width, no gum margin was found), then width in mm, then width relative to the central incisor (1.00). The mm values use the {d.scaleTag} scale, so treat them as about plus or minus {d.scaleTag === "iris" ? 12 : 20}%. The long blue line is the horizontal reference line. Drawn from ratios and the detected crown widths, so it appears even when decay or quality checks raise a flag.</p>
+      <p className={muted}>Left: the photo as taken. Right: an idealized proposal, not a trace. It is generated from a few anchors (midline, incisal plane, smile width, lower lip curve) and teaching norms: symmetric teeth, central width 1 : lateral 0.75 : canine 0.56, central W/H 78%, centrals and canines at the same gingival level, laterals about 1 mm more incisal, incisal curve following the lower lip, fixed gum scallop. Labels on each tooth: crown height mm, width mm, width relative to the central. The mm values use the {d.scaleTag} scale (about plus or minus {d.scaleErrPct}%). Measured values are in the Tracing and Report tabs; the list below compares the tracing with this ideal.</p>
       <div className="flex flex-wrap gap-3 mt-2">
         <figure><canvas ref={a} className="max-w-full rounded" data-testid="design-before" /><figcaption className={muted}>Before (photo)</figcaption></figure>
         <figure><canvas ref={b} className="max-w-full rounded" data-testid="design-after" /><figcaption className={muted}>Proposed (estimated outlines, not a simulated result)</figcaption></figure>
+      </div>
+      <div className="mt-2" data-testid="design-corrections">
+        <h4 className="font-semibold">Proposed corrections (tracing to ideal)</h4>
+        {d.corrections.length ? <ul className={`${muted} list-disc pl-5`}>{d.corrections.map((c) => <li key={c}>{c}</li>)}</ul> : <p className={muted}>No width or crown length differs from the ideal by more than the measurement error, or no gum margin was found to compare lengths.</p>}
+        <p className={muted}>Only differences above half the scale error are listed. Each comes from a rough tooth box (about plus or minus 15%) and the gum colour step, so confirm each by eye before acting.{d.scaleTag === "assumed" ? " The scale here is assumed (a central incisor of 8.5 mm), so every mm figure is the traced ratio to the central width, not a measured length. A large length change usually means short visible crowns (gum covering them) or a gum step the finder placed wrongly; it is a prompt to look, not a plan." : ""}</p>
       </div>
       <div className="flex gap-2 mt-2">
         <button type="button" className="px-3 py-1 rounded border" data-testid="export-png" onClick={() => { const c = b.current; if (!c) return; const l = document.createElement("a"); l.download = "dsd-proposed.png"; l.href = c.toDataURL("image/png"); l.click(); }}>Save PNG (proposed)</button>
         <button type="button" className="px-3 py-1 rounded border" data-testid="export-svg" onClick={() => { const l = document.createElement("a"); l.download = "dsd-outline.svg"; l.href = URL.createObjectURL(new Blob([designSvg(d)], { type: "image/svg+xml" })); l.click(); }}>Save outline (SVG)</button>
       </div>
       <ul className={`${muted} list-disc pl-5 mt-2`}>
-        <li data-testid="design-source">Outline source: {d.basis.fitted} of 6 teeth use the detected crown width (when it is within 20% below to 25% above the ratio width), {d.basis.ratio} use the generic ratio width (detection missing or implausible).</li>
-        <li>Midline: {d.basis.midline}. Incisal plane: {d.basis.plane}. Size: {d.basis.span} ({d.basis.nUsed} teeth used).</li>
-        <li>Generic ratio is the RED 75% rule (each tooth 75% of the apparent width of the one nearer the midline: central 1, lateral 0.75, canine 0.56), a teaching choice; height = width / 0.78 is derived from a W/H goal, not measured, laterals about 7% shorter, lateral zeniths about 8% lower. Tooth boxes are rough (plus or minus 15%), so check size by eye.</li>
+        <li data-testid="design-source">{d.basis.fitted} of 6 teeth were detected and compared with the ideal; {d.basis.ratio} were not found (ideal drawn anyway). Anchor: {d.basis.width}. Incisal curve: {d.basis.arc}.</li>
+                <li>Midline: {d.basis.midline}. Incisal plane: {d.basis.plane}. Size: {d.basis.span} ({d.basis.nUsed} teeth used).</li>
+        <li>Norms used (teaching choices, not measured on this patient): RED 75% widths, central W/H 78% (goal range 75 to 80%, PMC3010027), laterals 1 mm more incisal than the centrals and canines, gum scallop depth fixed at 22% of a central height. Detected tooth boxes are rough (plus or minus 15%).</li>
         {flags.map((f) => <li key={f}>Flag: {f}</li>)}
       </ul>
     </section>
