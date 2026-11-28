@@ -147,7 +147,7 @@ export function measureLines(L: RefLines): Finding[] {
     out.push({
       id: "gum-show", label: "Gum show at this smile (upper lip edge to top of the central teeth)", value: gum <= 0 ? `none (lip covers about ${r1(-gum)} mm of crown)` : `${r1(gum)} mm`,
       level: gum > 3 ? "check" : gum > 2 ? "note" : "ok",
-      note: `Goal: 0 to 2 mm ok, 2 to 3 mm borderline, above 3 mm gummy. Only valid if the photo is a natural posed smile. The top of the tooth box stands in for the gingival margin and the lip edge comes from the face mesh, so expect about 1 mm error; ${cal}.`,
+      note: `Goal: 0 to 2 mm ok, 2 to 3 mm borderline, above 3 mm gummy. Only valid if the photo is a natural posed smile. The top of the tooth box stands in for the gingival margin; on the one photo with hand-marked cervical margins it sat 7 to 21% of the box height above them (median 16%, 7 teeth), so this number is probably too high by 1 to 2 mm, and the lip edge comes from the face mesh; ${cal}.`,
     });
   }
   // cross-checks between independent estimates: a number that fails one is shown as not reliable
