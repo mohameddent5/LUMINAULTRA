@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { autoDesign } from "@/lib/autoDesign";
 import type { ScreenInput } from "@/lib/screening";
+import { smoothSegments, designSvg } from "@/lib/designExport";
 
 /** Automatic proposed design next to the untouched photo. Estimated from ratios; not a finished treatment plan. */
 export function ProposedDesign({ src, input, flags, muted, card }: { src: HTMLCanvasElement; input: ScreenInput; flags: string[]; muted: string; card: string }) {
@@ -20,7 +21,7 @@ export function ProposedDesign({ src, input, flags, muted, card }: { src: HTMLCa
       if (!after) continue;
       g.save(); g.scale(scale, scale); g.translate(-sx, -sy);
       const lw = Math.max(1.2, sw / 330);
-      const path = (poly: { x: number; y: number }[]) => { g.beginPath(); poly.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.closePath(); };
+      const path = (poly: { x: number; y: number }[]) => { g.beginPath(); g.moveTo(poly[0].x, poly[0].y); for (const s of smoothSegments(poly)) g.bezierCurveTo(s.c1.x, s.c1.y, s.c2.x, s.c2.y, s.to.x, s.to.y); g.closePath(); };
       g.lineJoin = "round";
       for (const t of d.teeth) { path(t.poly); g.fillStyle = "rgba(255,255,255,0.22)"; g.fill(); g.strokeStyle = "rgba(255,255,255,0.95)"; g.lineWidth = lw; g.stroke(); }
       g.setLineDash([lw * 3, lw * 2]); g.strokeStyle = "#f472b6"; g.lineWidth = lw; g.beginPath(); d.gum.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.stroke(); g.setLineDash([]);
@@ -40,6 +41,10 @@ export function ProposedDesign({ src, input, flags, muted, card }: { src: HTMLCa
       <div className="flex flex-wrap gap-3 mt-2">
         <figure><canvas ref={a} className="max-w-full rounded" data-testid="design-before" /><figcaption className={muted}>Before (photo)</figcaption></figure>
         <figure><canvas ref={b} className="max-w-full rounded" data-testid="design-after" /><figcaption className={muted}>Proposed (estimated outlines, not a simulated result)</figcaption></figure>
+      </div>
+      <div className="flex gap-2 mt-2">
+        <button type="button" className="px-3 py-1 rounded border" data-testid="export-png" onClick={() => { const c = b.current; if (!c) return; const l = document.createElement("a"); l.download = "dsd-proposed.png"; l.href = c.toDataURL("image/png"); l.click(); }}>Save PNG (proposed)</button>
+        <button type="button" className="px-3 py-1 rounded border" data-testid="export-svg" onClick={() => { const l = document.createElement("a"); l.download = "dsd-outline.svg"; l.href = URL.createObjectURL(new Blob([designSvg(d)], { type: "image/svg+xml" })); l.click(); }}>Save outline (SVG)</button>
       </div>
       <ul className={`${muted} list-disc pl-5 mt-2`}>
         <li data-testid="design-source">Outline source: {d.basis.fitted} of 6 teeth use the detected crown width (when it is within 20% below to 25% above the ratio width), {d.basis.ratio} use the generic ratio width (detection missing or implausible).</li>
