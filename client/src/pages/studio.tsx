@@ -1740,7 +1740,7 @@ export default function Studio() {
     const lines = [
       `Consent: patient agreement confirmed by the dentist${consentAt.current ? " on " + new Date(consentAt.current).toLocaleString() : ""}`,
       `Photo capture: ${quality?.acceptable ? "passed all checks" : "did not pass all checks, treat as a rough idea"}. Preview confidence ${tier}.`,
-      `Shape tools: ${shapeOk ? "available for this photo" : "not offered, the photo was not clear enough to reshape teeth honestly"}.`,
+      `Shape tools: ${shapeOk ? "available for this photo" : engine && bracesSuspected(engine) ? "not offered, braces or brackets are present" : "not offered, the photo was not clear enough to reshape teeth honestly"}.`,
       ...(flagLine ? [flagLine] : []),
       `Edits applied: ${used}. Whitening level: ${levelWord.toLowerCase()}.`,
       `Case ID ${caseId || "-"} | Smile Studio engine 1 | Photo source: ${sourceRef.current}`,
