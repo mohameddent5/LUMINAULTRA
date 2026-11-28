@@ -1,0 +1,12 @@
+# Open items (running list, priority order)
+
+Rules that apply to every item: held-out scoring first, fixed no-regression table, any photo that gets worse blocks a change, no deployment, private photos never in git, no overclaiming.
+
+1. Finder on a broken upper arch. HELD-OUT aa3fa16b (severe caries, broken upper front teeth): the finder locked onto the 9 LOWER front teeth, 0 of 6 marked teeth covered. Cause is tooth localisation, not the caries rule.
+2. Lower-row guard (refuse or warn when the finder row is the lower arch). Tried: colour of the strips above and below the found row (pink and brightness). Separates aa3fa16b (above 18, below 52) from ex26 (62, 53) and cd96ac5c (55, 57), but ex27 (a correct upper row, low light) reads 15 vs 46 like the wrong row, so it would false-trigger. REJECTED, not shipped. Next idea: look for a second tooth-like row above the found row (SAM candidates above the row, tooth-sized, separated by a dark gap).
+3. Decay recall on small margin and interproximal lesions. HELD-OUT cd96ac5c: 1 of 6 marked teeth flagged (precision 1 of 1, no false flags on 4 unmarked teeth). Needs a margin or colour-difference cue, checked against the no-regression table. Do not tune to one photo.
+4. False braces flags on degraded or low-light photos (edge rule). Needs labelled brackets.
+5. Low-light and small-size recall (ex2 dark, ex26 50%).
+6. Spacing thresholds (30% spacing, 70% missing tooth) are geometry rules with no validation claim.
+7. Database: waits on a fresh isolated Postgres (docs/DEPLOY.md). Release blocker: old credential must be confirmed revoked.
+8. Docs and tests: keep docs/scoring-protocol.md and the unit suites current.
