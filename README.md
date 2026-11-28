@@ -1,3 +1,5 @@
+See [docs/USER-GUIDE.md](docs/USER-GUIDE.md) for the dentist-facing guide and [docs/open-items.md](docs/open-items.md) for known limits.
+
 this is v1.0 of the project we pushed it and now its way better we wanted to upload the code to github but it doesnt allow anything above 25 mgb
 
 ---
