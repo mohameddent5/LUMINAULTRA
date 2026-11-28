@@ -1,9 +1,5 @@
-import { useLocation } from "wouter";
-import { Button } from "@/components/ui/button";
-import { Home } from "lucide-react";
 
 export default function ClinicalGuidelines() {
-  const [, navigate] = useLocation();
 
   const guidelines = [
     {

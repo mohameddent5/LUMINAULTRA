@@ -3,14 +3,7 @@ import { INTENDED_USE } from "@/lib/intendedUse";
 import type { ComponentType } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  Activity,
-  Camera,
-  ClipboardList,
-  FileText,
   FolderOpen,
-  GitCompare,
-  Home,
-  LayoutDashboard,
   Menu,
   Settings as SettingsIcon,
   ShieldCheck,

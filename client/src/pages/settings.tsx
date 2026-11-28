@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Home, Download, Upload, Trash2 } from "lucide-react";
+import { Download, Upload, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 interface ClinicSettings {
@@ -13,7 +12,6 @@ interface ClinicSettings {
 }
 
 export default function Settings() {
-  const [, navigate] = useLocation();
   const [settings, setSettings] = useState<ClinicSettings>({
     clinicName: "Dental Clinic",
     doctorName: "Dr. Smith",

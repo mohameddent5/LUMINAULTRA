@@ -23,7 +23,7 @@ import {
   Type,
   UserRound,
 } from "lucide-react";
-import { samTeeth, samTeethRobust, type SamTeeth } from "@/lib/samTeeth";
+import { samTeethRobust, type SamTeeth } from "@/lib/samTeeth";
 import { proposeOutline, PROPOSAL_LABEL, type Proposal } from "@/lib/proposedOutline";
 import { segmentTeeth, renderTeeth, whitenInPlace, type TeethEngine, type ToothEdit, type ShapeOptions } from "@/lib/smileEngine";
 import { jpegToPdf } from "@/lib/pdf";

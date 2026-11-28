@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Home, Trash2, Download } from "lucide-react";
+import { Trash2, Download } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 interface PatientAnalysis {
