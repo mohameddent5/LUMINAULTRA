@@ -12,3 +12,5 @@ Rules that apply to every item: held-out scoring first, fixed no-regression tabl
 8. Docs and tests: keep docs/scoring-protocol.md and the unit suites current.
 9. Patient PDF report: Arabic version built (right-to-left canvas, mirrored before/after and option order); English stays the default and is unchanged. The Arabic wording needs a native read.
 10. Arabic wording was written by the build agent, not a native reviewer: one read by Mohamed needed (about 65 strings, see the commit "Arabic: translate 61 UI strings").
+
+Regression rows rerun at 5e7abb3 (Nov 28): ex19 (inpainted) tier C, 5 teeth, design refused, braces flag. Selfie 039abc28 tier C, 6 teeth, design refused, braces flag (the known false braces flag on a degraded photo, item 4). No earlier numeric baseline was kept for these two rows, so "unchanged" rests on the earlier notes that both were braces-flagged and refused.
