@@ -1472,7 +1472,8 @@ export default function Studio() {
         : proposeOutline(upT, region, gumVisibleShare(o, region, upT) >= 0.5, true, analysis && !analysis.close && analysis.outerLip ? analysis.polygon : null, checkTeeth(engine));
       if (design.ok && checkMode(quality, engine)) design = { ...design, notes: ["CHECK: braces or possible decay were flagged on this photo, so outlines on the marked teeth are less reliable. Verify each marked tooth clinically before using the design.", ...design.notes] };
       if (design.ok && analysis?.close) design = { ...design, notes: ["No face in frame: the facial midline and lips were not checked, so the dental midline is used as the reference.", ...design.notes] };
-    } else if (engine && region) design = { ok: false, reason: "The photo checks did not pass, so no design is drawn." };
+    } else if (engine && region && (engine as { rowSuspect?: boolean }).rowSuspect) design = { ok: false, reason: "The tool may have picked up the lower front teeth instead of the upper ones, because another tooth-sized shape sits above the teeth it found. No design is drawn. Retake with the upper front teeth fully visible and in focus, or check the upper teeth by eye." };
+    else if (engine && region) design = { ok: false, reason: "The photo checks did not pass, so no design is drawn." };
     const dn = design ? (design.ok ? { ok: true, text: design.notes.join(" ") } : { ok: false, text: design.reason }) : null;
     setDesignNote((p) => (p && dn && p.ok === dn.ok && p.text === dn.text ? p : dn));
     if (guideRef.current) drawGuides(guideRef.current, o, region, engine, showDetect, sel, showFace ? analysis?.face : null, lowerBoxes, analysis && !analysis.close && analysis.outerLip ? { inner: analysis.polygon, outer: analysis.outerLip } : null, design);
@@ -2179,6 +2180,8 @@ export default function Studio() {
                     )}
                     {bracesSuspected(engine) ? (
                       <p className={`text-base ${muted}`} data-testid="flag-braces">Braces or brackets look present on the teeth. The colour flags assume plain enamel, so no decay flags are shown. Any design is marked CHECK and is less reliable on brackets. This is a caution, not a finding.</p>
+                    ) : quality.acceptable && tier === "C" && rowSuspect ? (
+                      <p className={`text-base ${muted}`}>The tool may have found the lower front teeth instead of the upper ones, so no design is drawn. Retake with the upper front teeth fully visible, or check them by eye.</p>
                     ) : quality.acceptable && tier === "C" ? (
                       <p className={`text-base ${muted}`}>The photo itself is fine, but dark patches suggest decay or damage. Any design is marked CHECK on those teeth because the shape tools assume sound crowns.</p>
                     ) : quality.acceptable ? (
