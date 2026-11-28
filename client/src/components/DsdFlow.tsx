@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { autoLines, measureLines, type Finding, type ScreenInput } from "@/lib/screening";
+import { EYE_SD_TOL_DEG, type FrameStats } from "@/lib/frameStats";
 import { autoDesign } from "@/lib/autoDesign";
 import { RefLinesEditor } from "./RefLinesEditor";
 import { ProposedDesign } from "./ProposedDesign";
@@ -40,13 +41,19 @@ function printReport(rows: Finding[], flags: string[], calibrated: boolean) {
 }
 const FLAG = { ok: ["Right", "bg-emerald-400"], note: ["Uncertain / borderline", "bg-amber-300"], check: ["Wrong (outside goal)", "bg-red-400"] } as const;
 
-function Report({ input, flags, muted, card }: { input: ScreenInput; flags: string[]; muted: string; card: string }) {
+function Report({ input, flags, muted, card, fs }: { fs?: FrameStats | null; input: ScreenInput; flags: string[]; muted: string; card: string }) {
   const rows = useMemo(() => {
     const a = autoLines(input);
     const f: Finding[] = [...measureLines(a.lines)];
     if (a.asym) f.push(a.asym);
     if (!a.enough) f.push({ id: "no-teeth", label: "Upper teeth", value: "n/a", level: "note", note: "Fewer than 4 upper teeth were found, so tooth-based numbers are not available." });
     else if (!a.trusted) f.push({ id: "midline-unreliable", label: "Dental midline", value: "n/a", level: "note", note: "The row found is not symmetric enough (missing, broken or merged tooth): mark by eye." });
+    if (fs) {
+      const r1 = (v: number) => Math.round(v * 10) / 10;
+      const bad = fs.eye.sd > EYE_SD_TOL_DEG || fs.com.sd > EYE_SD_TOL_DEG;
+      f.push({ id: "frames", label: `Frame-to-frame consensus over ${fs.n} camera frames`, value: `eye line ${r1(fs.eye.med)}° ± ${r1(fs.eye.sd)}°, mouth corners ${r1(fs.com.med)}° ± ${r1(fs.com.sd)}°, mid offset ${r1(fs.mid.med)}% ± ${r1(fs.mid.sd)}%, iris size ± ${r1((fs.iris.sd / Math.max(1e-6, fs.iris.med)) * 100)}%`, level: bad ? "check" : "ok", note: "Median over the frames of the smile capture with a robust spread (MAD). A large spread means the head or expression moved, so single-frame angles are not reliable. Spread shows repeatability, not accuracy against the truth." });
+      if (bad) for (const x of f) if (x.id === "eye-line" || x.id === "commissure") x.unreliable = `angles vary by more than ${EYE_SD_TOL_DEG}° between frames`;
+    }
     const d = autoDesign(input);
     if (d) {
       const w = input.teeth.filter((t) => t.incisalDown).sort((x, y) => x.cx - y.cx);
@@ -84,7 +91,7 @@ function Report({ input, flags, muted, card }: { input: ScreenInput; flags: stri
   );
 }
 
-export function DsdFlow({ src, input, flags, caseKey, muted, card }: { src: HTMLCanvasElement; input: ScreenInput; flags: string[]; caseKey: string; muted: string; card: string }) {
+export function DsdFlow({ frameStats, src, input, flags, caseKey, muted, card }: { frameStats?: FrameStats | null; src: HTMLCanvasElement; input: ScreenInput; flags: string[]; caseKey: string; muted: string; card: string }) {
   const [step, setStep] = useState<"trace" | "design" | "report">("trace");
   const tabs = [["trace", "1. Tracing"], ["design", "2. Design"], ["report", "3. Report"]] as const;
   const box = `rounded-2xl p-5 space-y-3 ${card}`;
@@ -98,7 +105,7 @@ export function DsdFlow({ src, input, flags, caseKey, muted, card }: { src: HTML
       </div>
       <div hidden={step !== "trace"}><RefLinesEditor src={src} input={input} caseKey={caseKey} muted={muted} card={card} /></div>
       <div hidden={step !== "design"}><ProposedDesign src={src} input={input} flags={flags} muted={muted} card={box} /></div>
-      <div hidden={step !== "report"}><Report input={input} flags={flags} muted={muted} card={box} /></div>
+      <div hidden={step !== "report"}><Report fs={frameStats} input={input} flags={flags} muted={muted} card={box} /></div>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 /** Screening measurements on synthetic landmarks. Run with `npm run test:screen`. Behaviour pins only. */
+import { summarizeFrames } from "../client/src/lib/frameStats";
 import { screen, measureLines } from "../client/src/lib/screening";
 let failed = 0;
 const check = (n: string, ok: boolean) => { console.log(`  ${ok ? "ok  " : "FAIL"} ${n}`); if (!ok) failed++; };
@@ -62,6 +63,12 @@ void row;
   check("two facial midline estimates disagreeing: midline is marked not reliable", !!get(c, "midline").unreliable && !!get(c, "midline-angle").unreliable);
   const d = measureLines({ ...L, marks: { glabella: { x: 50, y: -40 }, subnasale: { x: 50, y: 0 }, stomion: { x: 50, y: 30 }, menton: { x: 50, y: 50 }, upperLip: { x: 50, y: 28 } }, ctop: 25 });
   check("agreeing estimates: midline not marked", !get(d, "midline").unreliable);
+}
+{
+  const mk = (e: number): any => ({ eyeDeg: e, comDeg: 0.5, midPct: 1, irisRel: 0.02 });
+  const fr = summarizeFrames([0.1, -0.2, 0.0, 0.2, -0.1, 0.1, 25, 0.0, -0.1, 0.2].map(mk));
+  check("frame consensus: one 25 degree spike frame does not move the median or the spread", !!fr && Math.abs(fr.eye.med) < 0.15 && fr.eye.sd < 0.5);
+  check("frame consensus: fewer than 5 frames gives no statistics", summarizeFrames([mk(0), mk(1)]) === null);
 }
 check("fewer than 4 teeth: no dental values", !!get(screen({ face: null, teeth: teeth().slice(0, 3), region }), "no-teeth"));
 console.log(failed ? `screening: ${failed} FAILED` : "screening: all checks passed");

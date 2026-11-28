@@ -1,4 +1,5 @@
 import { lesionFlags, INVESTIGATIONAL } from "@/lib/lesionFlags";
+import { summarizeFrames, type FrameSample, type FrameStats } from "@/lib/frameStats";
 import { DsdFlow } from "@/components/DsdFlow";
 import { RefLinesEditor } from "@/components/RefLinesEditor";
 import { spacingNotes } from "@/lib/spacingGeometry";
@@ -1149,6 +1150,7 @@ export default function Studio() {
   const [preset, setPreset] = useState<PresetKey | null>(null);
   const [thumbs, setThumbs] = useState<Partial<Record<PresetKey, string>>>({});
   const [photoVersion, setPhotoVersion] = useState(0);
+  const [frameStats, setFrameStats] = useState<FrameStats | null>(null);
   const guideRef = useRef<HTMLCanvasElement>(null);
   const revealed = useRef(0);
   const [live, setLive] = useState<{ ok: boolean; text: string } | null>(null);
@@ -1270,6 +1272,7 @@ export default function Studio() {
   const onFile = async (f: File | undefined) => {
     if (!f) return;
     sourceRef.current = "file";
+    setFrameStats(null);
     const url = URL.createObjectURL(f);
     try {
       const im = await loadImage(url);
@@ -1286,6 +1289,7 @@ export default function Studio() {
     const v = videoRef.current;
     if (!v || !v.videoWidth) return;
     sourceRef.current = "camera-single";
+    setFrameStats(null);
     const c = toCanvas(v, v.videoWidth, v.videoHeight, 1280);
     stopCamera();
     await process(c);
@@ -1311,6 +1315,7 @@ export default function Studio() {
     let best = pool[0];
     for (const g of pool) if (peak(g) > peak(best)) best = g;
     sourceRef.current = "camera-burst";
+    setFrameStats(null);
     setBurstMsg("");
     setSaved(false);
     setMsg("");
@@ -1355,6 +1360,7 @@ export default function Studio() {
     if (!v || !v.videoWidth) return;
     setBurstMsg("Smile naturally, hold it...");
     const tr = new PeakTracker<HTMLCanvasElement>();
+    const samples: FrameSample[] = [];
     let prev: Uint8Array | null = null;
     const t0 = Date.now();
     try {
@@ -1365,6 +1371,7 @@ export default function Studio() {
         if (f && f.length > 400) {
           const r = measureFrame(small, f, prev);
           prev = r.small;
+          try { const g = faceGuides(f, small.width, small.height); samples.push({ eyeDeg: (Math.atan2(g.ipl[1].y - g.ipl[0].y, g.ipl[1].x - g.ipl[0].x) * 180) / Math.PI, comDeg: g.comCantDeg, midPct: g.midOffsetPct, irisRel: (g.irisPx || NaN) / small.width }); } catch { /* frame skipped */ }
           tr.add(r.m, () => toCanvas(v, v.videoWidth, v.videoHeight, 1280));
         }
         await new Promise((r) => setTimeout(r, 60));
@@ -1378,6 +1385,7 @@ export default function Studio() {
     setBusy(true);
     setBurstMsg("");
     sourceRef.current = "camera-burst";
+    setFrameStats(summarizeFrames(samples));
     setSaved(false);
     setMsg("Reading each tooth...");
     const g = await gradeFrame(pick.frame);
@@ -2258,7 +2266,7 @@ export default function Studio() {
                   </div>
                 )}
                 {engine && region && originalRef.current && (
-                  <DsdFlow src={originalRef.current} input={{ face: analysis?.face || null, teeth: engine.teeth, region }} caseKey={`${caseId}-${photoVersion}`} muted={muted} card={card}
+                  <DsdFlow frameStats={frameStats} src={originalRef.current} input={{ face: analysis?.face || null, teeth: engine.teeth, region }} caseKey={`${caseId}-${photoVersion}`} muted={muted} card={card}
                     flags={[
                       ...(quality ? quality.signals.filter((x) => !x.ok).map((x) => `photo check "${x.id}" did not pass, so tooth boxes may be off`) : []),
                       ...(lesionFlags(engine).length ? [`${lesionFlags(engine).length} tooth/teeth with dark patches (possible decay). ${INVESTIGATIONAL.en}`] : []),

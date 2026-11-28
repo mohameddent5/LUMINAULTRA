@@ -51,3 +51,5 @@ DsdFlow.tsx: Tracing (reference lines editor), Design (before vs proposed), Repo
 3. TODO: 5 to 10 s capture, median over frames for spikes and an uncertainty (needs a video capture screen; the photo path stays).
 4. TODO: head roll vs camera roll and approximate profile from a slow head turn (face mesh depth); error to be measured, not assumed.
 5. Optional later: profile-smile photo (occlusal plane), retracted view (gingival margin).
+- (2) DONE: cross-checks (two facial midline estimates; iris vs tooth box) turn a number into "not reliable, check by eye".
+- (3) PARTLY DONE: during the 8 s smile capture each frame's eye-line angle, mouth-corner angle, mid offset and iris size are collected; the Report shows median and robust spread (MAD) over N frames and marks the angles "check by eye" when the spread exceeds 2.5 degrees. Unit-tested (one spike frame does not move the median). Not yet run with a real camera session in a browser. It measures repeatability, not accuracy.
