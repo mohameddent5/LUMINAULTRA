@@ -89,7 +89,7 @@ const T = {
     natural_depthHint: "Translucent edges, warmer necks",
     guides: "Show guides",
     guidesHint: "Midline and edge curve",
-    guideLegend: "Cyan dashed: dental midline. White: smooth edge curve. Yellow: current edge line. Black: incisal edge. Green: mesial side. Yellow dots: distal side. Light blue: cervical edge (only where gum shows). Pink dots: gum line (only where gum shows).",
+    guideLegend: "Cyan dashed: dental midline. White: smooth edge curve. Yellow: current edge line. Red: incisal edge. Blue: mesial side. Black: distal side. Cyan: cervical edge (only where gum shows). Pink dots: gum line (only where gum shows).",
     tapTeeth: "Tap a tooth to adjust it.",
     editTitle: "Adjust this tooth",
     longer: "Longer",
@@ -214,7 +214,7 @@ const T = {
     natural_depthHint: "حواف شفافة وعنق أدفأ",
     guides: "إظهار الخطوط الإرشادية",
     guidesHint: "خط المنتصف ومنحنى الحافة",
-    guideLegend: "Cyan dashed: dental midline. White: smooth edge curve. Yellow: current edge line. Black: incisal edge. Green: mesial side. Yellow dots: distal side. Light blue: cervical edge (only where gum shows). Pink dots: gum line (only where gum shows).",
+    guideLegend: "Cyan dashed: dental midline. White: smooth edge curve. Yellow: current edge line. Red: incisal edge. Blue: mesial side. Black: distal side. Cyan: cervical edge (only where gum shows). Pink dots: gum line (only where gum shows).",
     tapTeeth: "المس سناً لتعديله.",
     editTitle: "عدّل هذا السن",
     longer: "أطول",
@@ -865,7 +865,7 @@ function drawGuides(
     // one outline per tooth, plus each upper tooth's width as a share of the widest one
     const upAll = engine.teeth.filter((t) => t.incisalDown).sort((a, b) => a.cx - b.cx);
     const widest = Math.max(1, ...upAll.map((t) => t.bw));
-    // legend: black incisal edge, green mesial side (towards the midline), yellow distal side, light blue cervical edge (only where gum is visible)
+    // legend (his): red incisal edge, blue mesial side (towards the midline), black distal side, cyan cervical edge (only where gum is visible)
     const midX = upAll.length ? upAll.map((t) => t.cx).sort((a, b) => a - b)[Math.floor(upAll.length / 2)] : 0;
     const gumSeen = gumVisibleShare(o, region, upAll) >= 0.5;
     for (const t of engine.teeth) {
@@ -881,9 +881,10 @@ function drawGuides(
           if (cervical && !gumSeen) continue;
           const mesialRight = t.cx < midX;
           const mesial = fx > 0.5 === mesialRight;
-          g.fillStyle = incisal ? "#000000" : cervical ? "#7dd3fc" : mesial ? "#22c55e" : "#facc15";
+          // his legend: red incisal, cyan cervical, blue mesial, black distal (distal gets a white halo so it shows on dark teeth and gums)
+          g.fillStyle = incisal ? "#ef4444" : cervical ? "#22d3ee" : mesial ? "#3b82f6" : "#000000";
           const sz = Math.max(1, lw * 0.9);
-          if (incisal) { g.fillStyle = "rgba(255,255,255,0.8)"; g.fillRect(t.bx + x + region.x0 - 1, t.by + y + region.y0 - 1, sz + 2, sz + 2); g.fillStyle = "#000000"; }
+          if (!incisal && !cervical && !mesial) { g.fillStyle = "rgba(255,255,255,0.8)"; g.fillRect(t.bx + x + region.x0 - 1, t.by + y + region.y0 - 1, sz + 2, sz + 2); g.fillStyle = "#000000"; }
           g.fillRect(t.bx + x + region.x0, t.by + y + region.y0, sz, sz);
         }
     }
@@ -985,11 +986,11 @@ function drawGuides(
       g.lineWidth = lw;
       for (const b of lower) {
         const mesialLeft = (b.x0 + b.x1) / 2 > midX + region.x0;
-        g.strokeStyle = mesialLeft ? "#22c55e" : "#facc15";
+        g.strokeStyle = mesialLeft ? "#3b82f6" : "#000000";
         g.beginPath(); g.moveTo(b.x0, b.y0 + (b.y1 - b.y0) * 0.1); g.lineTo(b.x0, b.y1 - (b.y1 - b.y0) * 0.15); g.stroke();
-        g.strokeStyle = mesialLeft ? "#facc15" : "#22c55e";
+        g.strokeStyle = mesialLeft ? "#000000" : "#3b82f6";
         g.beginPath(); g.moveTo(b.x1, b.y0 + (b.y1 - b.y0) * 0.1); g.lineTo(b.x1, b.y1 - (b.y1 - b.y0) * 0.15); g.stroke();
-        g.strokeStyle = "#000000";
+        g.strokeStyle = "#ef4444";
         g.beginPath(); g.moveTo(b.x0, b.y0); g.lineTo(b.x1, b.y0); g.stroke();
       }
       void merged; void ytop; void ybot;
