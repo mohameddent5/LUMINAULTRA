@@ -20,6 +20,8 @@ export interface Finding {
   /** measured value with unit, or "n/a" */
   value: string;
   level: Level;
+  /** set when the number is not trustworthy on this photo: the reason. Show "not reliable, check by eye" instead of the value. */
+  unreliable?: string;
   /** what it means and how sure we are */
   note: string;
 }
@@ -148,6 +150,19 @@ export function measureLines(L: RefLines): Finding[] {
       note: `Goal: 0 to 2 mm; above 3 mm is a gummy smile. Only valid if the photo is a natural posed smile. The top of the tooth box stands in for the gingival margin and the lip edge comes from the face mesh, so expect about 1 mm error; ${cal}.`,
     });
   }
+  // cross-checks between independent estimates: a number that fails one is shown as not reliable
+  if (L.marks && L.mid && L.cw) {
+    const m = L.marks;
+    const gx = m.glabella.x, gy = m.glabella.y, sx = m.subnasale.x, sy = m.subnasale.y;
+    const y = m.stomion.y;
+    const altX = sy !== gy ? gx + ((y - gy) / (sy - gy)) * (sx - gx) : sx;
+    const t = (y - L.mid[0].y) / ((L.mid[1].y - L.mid[0].y) || 1);
+    const mainX = L.mid[0].x + t * (L.mid[1].x - L.mid[0].x);
+    const d = Math.abs(altX - mainX) / L.cw;
+    if (d > 0.5) for (const f of out) if (f.id === "midline" || f.id === "midline-angle") f.unreliable = `two facial midline estimates (glabella to subnasale vs bridge to chin) differ by ${r1(d * 100)}% of a central width at the mouth (face turned or asymmetric)`;
+  }
+  const sc = out.find((f) => f.id === "scale-check");
+  if (sc && sc.level === "check") for (const f of out) if (f.id === "gum-show") f.unreliable = "iris scale and tooth box disagree, so mm are not trustworthy";
   return out;
 }
 

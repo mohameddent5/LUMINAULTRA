@@ -24,10 +24,10 @@ const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 function printReport(rows: Finding[], flags: string[], calibrated: boolean) {
   const w = window.open("", "_blank");
   if (!w) return;
-  const key = rows.filter((r) => r.level !== "ok" && r.value !== "n/a");
+  const key = rows.filter((r) => (r.level !== "ok" || r.unreliable) && r.value !== "n/a");
   const flagged = rows.filter((r) => r.level !== "ok").length;
-  const card = (r: Finding) => `<div class="card"><b>${esc(r.label)}: ${esc(r.value)}</b><div>${r.level === "check" ? "Outside the goal on this photo" : "Borderline or uncertain"} (goal: ${esc(GOAL[r.id] || "n/a")})</div><div class="v">Verify: ${esc(VERIFY[r.id] || "Check clinically.")}</div></div>`;
-  const snap = rows.map((r) => `<tr><td>${esc(r.label)}</td><td>${esc(r.value)}</td><td>${esc(GOAL[r.id] || "")}</td><td>${r.level === "ok" ? "Right" : r.level === "note" ? "Uncertain" : "Wrong"}</td></tr>`).join("");
+  const card = (r: Finding) => `<div class="card"><b>${esc(r.label)}: ${esc(r.unreliable ? "check by eye" : r.value)}</b><div>${r.unreliable ? "Not reliable on this photo" : r.level === "check" ? "Outside the goal on this photo" : "Borderline or uncertain"} (goal: ${esc(GOAL[r.id] || "n/a")})</div><div class="v">Verify: ${esc(VERIFY[r.id] || "Check clinically.")}</div></div>`;
+  const snap = rows.map((r) => `<tr><td>${esc(r.label)}</td><td>${esc(r.unreliable ? "Not reliable, check by eye: " + r.unreliable : r.value)}</td><td>${esc(GOAL[r.id] || "")}</td><td>${r.unreliable ? "Check by eye" : r.level === "ok" ? "Right" : r.level === "note" ? "Uncertain" : "Wrong"}</td></tr>`).join("");
   const list = ["Review key findings before the patient is seated.", "Prepare full-smile and at-rest photographs for clinical comparison.", ...(rows.some((r) => r.id === "gum-show" && r.level !== "ok") ? ["Periodontal probing is recommended: gum show is outside the goal."] : []), "Frontal clinical photograph with a horizontal reference level may be useful.", ...(flagged >= 3 ? ["Several parameters flagged: consider mounted models before consultation."] : []), ...flags.map((f) => `Flag to check clinically: ${f}`)];
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Pre-clinical DSD screening summary</title><style>body{font:13px/1.4 system-ui,sans-serif;margin:24px;color:#0f172a}h1{font-size:20px;margin:0}h2{background:#0e7490;color:#fff;padding:4px 8px;font-size:12px;margin:14px 0 6px}.card{border:1px solid #94a3b8;border-radius:8px;padding:8px;margin:6px 0}.v{color:#475569;font-size:12px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #e2e8f0;padding:3px 4px;text-align:left;vertical-align:top}.meta{display:flex;gap:24px;background:#f1f5f9;padding:6px 8px;margin-top:8px}li{margin:3px 0;list-style:none}li:before{content:"\\2610  "}small{color:#475569}</style></head><body>
 <h1>Pre-clinical DSD screening summary</h1><small>Screening only. Requires clinical verification before any decision. No single score is given on purpose.</small>
@@ -61,7 +61,7 @@ function Report({ input, flags, muted, card }: { input: ScreenInput; flags: stri
       <h3 className="text-xl font-semibold">Report for the dentist</h3>
       <div className="rounded-xl border border-white/20 p-3 mt-2" data-testid="report-headline">
         <div className={muted}>Headline: gum show at this smile</div>
-        <div className="text-2xl font-semibold">{gum ? gum.value : "not measurable"}</div>
+        <div className="text-2xl font-semibold">{gum ? (gum.unreliable ? "not reliable, check by eye" : gum.value) : "not measurable"}</div>
         <div className={muted}>{gum ? gum.note : "Needs a face in frame (lip edge) and 4 or more upper teeth. Without a calibrated central width it assumes an 8.5 mm central incisor."}</div>
       </div>
       <button type="button" className="underline text-base min-h-[44px]" data-testid="report-print" onClick={() => printReport(rows, flags, calibrated)}>Print or save the report (one page)</button>
@@ -71,9 +71,9 @@ function Report({ input, flags, muted, card }: { input: ScreenInput; flags: stri
           {rows.map((r) => (
             <tr key={r.id} className="border-t border-white/10 align-top" data-testid={`report-${r.id}`}>
               <td className="py-2 pr-2">{r.label}<div className={`text-sm ${muted}`}>{r.note}</div></td>
-              <td className="pr-2 break-words">{r.value}</td>
+              <td className="pr-2 break-words">{r.unreliable ? `Not reliable, check by eye (${r.unreliable})` : r.value}</td>
               <td className="pr-2">{GOAL[r.id] || ""}</td>
-              <td><span className={`inline-block w-3 h-3 rounded-full mr-1 ${FLAG[r.level][1]}`} />{FLAG[r.level][0]}</td>
+              <td><span className={`inline-block w-3 h-3 rounded-full mr-1 ${r.unreliable ? "bg-slate-400" : FLAG[r.level][1]}`} />{r.unreliable ? "Check by eye" : FLAG[r.level][0]}</td>
             </tr>
           ))}
         </tbody>

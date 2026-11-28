@@ -51,6 +51,18 @@ void row;
   check("calibrated: 10 px at 2 px/mm is 5 mm and is marked calibrated", /5 mm, calibrated/.test(b.value));
   check("a dragged eye line changes the angle", get(measureLines({ ...L, ipl: [{ x: 0, y: 0 }, { x: 100, y: 10 }] }), "eye-line").value === "5.7°");
 }
+{
+  const L: any = { ipl: [{ x: 0, y: 0 }, { x: 100, y: 0 }], mid: [{ x: 50, y: -50 }, { x: 50, y: 50 }], dmid: [{ x: 60, y: -10 }, { x: 60, y: 10 }], cw: 20, irisPx: 23.4 };
+  const a = measureLines(L);
+  check("iris scale: 11.7 mm iris at 23.4 px gives 2 px/mm, midline 5 mm marked iris", /5 mm, iris/.test(get(a, "midline").value));
+  check("iris scale: implied central width 10 mm is reported", /^10 mm/.test(get(a, "scale-check").value));
+  const b = measureLines({ ...L, cw: 60 });
+  check("iris scale: implausible central width (30 mm) is not used and is flagged", /assumed/.test(get(b, "midline").value) && get(b, "scale-check").level === "check");
+  const c = measureLines({ ...L, marks: { glabella: { x: 50, y: -40 }, subnasale: { x: 70, y: 0 }, stomion: { x: 70, y: 30 }, menton: { x: 50, y: 50 }, upperLip: { x: 60, y: 28 } }, ctop: 25 });
+  check("two facial midline estimates disagreeing: midline is marked not reliable", !!get(c, "midline").unreliable && !!get(c, "midline-angle").unreliable);
+  const d = measureLines({ ...L, marks: { glabella: { x: 50, y: -40 }, subnasale: { x: 50, y: 0 }, stomion: { x: 50, y: 30 }, menton: { x: 50, y: 50 }, upperLip: { x: 50, y: 28 } }, ctop: 25 });
+  check("agreeing estimates: midline not marked", !get(d, "midline").unreliable);
+}
 check("fewer than 4 teeth: no dental values", !!get(screen({ face: null, teeth: teeth().slice(0, 3), region }), "no-teeth"));
 console.log(failed ? `screening: ${failed} FAILED` : "screening: all checks passed");
 process.exit(failed ? 1 : 0);
