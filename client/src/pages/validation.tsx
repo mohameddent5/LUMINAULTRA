@@ -66,7 +66,7 @@ function StatTile({ label, value, hint }: { label: string; value: string; hint?:
 
 function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="bg-card/50 rounded-lg border border-white/10 p-4 space-y-3">
+    <div className="bg-card/50 min-w-0 max-w-full overflow-hidden rounded-lg border border-white/10 p-4 space-y-3">
       <div>
         <h2 className="text-lg font-semibold text-white">{title}</h2>
         {subtitle ? <p className="text-xs text-muted-foreground mt-1">{subtitle}</p> : null}
@@ -502,7 +502,7 @@ export default function Validation() {
               title="Per-landmark accuracy"
               subtitle="Accepted localisation error by anatomical landmark, worst first."
             >
-              <div className="max-h-80 overflow-y-auto">
+              <div className="max-h-80 overflow-auto">
                 <table className="w-full text-xs">
                   <thead className="sticky top-0 bg-card">
                     <tr className="uppercase text-muted-foreground border-b border-white/10">
