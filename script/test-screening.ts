@@ -70,6 +70,18 @@ void row;
   check("frame consensus: one 25 degree spike frame does not move the median or the spread", !!fr && Math.abs(fr.eye.med) < 0.15 && fr.eye.sd < 0.5);
   check("frame consensus: fewer than 5 frames gives no statistics", summarizeFrames([mk(0), mk(1)]) === null);
 }
+{
+  const xs = [-130, -86, -43, 43, 86, 130];
+  const mkT = (ys: number[]): any[] => xs.map((x, i) => tooth(300 + x, ys[i]));
+  const lipAt = (x: number) => 230 - 14 * Math.pow((x - 300) / 140, 2);
+  const f: any = { ...face(), lowerLip: [-170, -130, -86, -43, 0, 43, 86, 130, 170].map((x) => ({ x: 300 + x, y: lipAt(300 + x) })), mouthInner: [{ x: 130, y: 220 }, { x: 470, y: 220 }] };
+  const cls = (ys: number[]) => get(screen({ face: f, teeth: mkT(ys), region }), "smile-arc")?.value || "";
+  check("smile arc: edges curved like the lip is consonant", /^consonant/.test(cls([190, 196, 200, 200, 196, 190])));
+  check("smile arc: straight edges is flat", /^flat/.test(cls([200, 200, 200, 200, 200, 200])));
+  check("smile arc: centrals higher than canines is reverse", /^reverse/.test(cls([205, 200, 190, 190, 200, 205])));
+  check("buccal corridor row is informational (ok)", get(screen({ face: f, teeth: mkT([190, 196, 200, 200, 196, 190]), region }), "buccal")?.level === "ok");
+  check("no lip points: no smile arc row", !get(screen({ face: face(), teeth: teeth(), region }), "smile-arc"));
+}
 check("fewer than 4 teeth: no dental values", !!get(screen({ face: null, teeth: teeth().slice(0, 3), region }), "no-teeth"));
 console.log(failed ? `screening: ${failed} FAILED` : "screening: all checks passed");
 process.exit(failed ? 1 : 0);

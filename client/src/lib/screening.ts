@@ -8,7 +8,7 @@
 export type P2 = { x: number; y: number };
 export interface ScreenTooth { cx: number; cy: number; bx: number; by: number; bw: number; bh: number; incisalDown: boolean }
 export interface ScreenInput {
-  face?: { irisPx?: number; ipl: [P2, P2]; mid: [P2, P2]; com: [P2, P2]; marks?: { glabella: P2; subnasale: P2; stomion: P2; menton: P2; upperLip?: P2 } } | null;
+  face?: { irisPx?: number; lowerLip?: P2[]; mouthInner?: [P2, P2]; ipl: [P2, P2]; mid: [P2, P2]; com: [P2, P2]; marks?: { glabella: P2; subnasale: P2; stomion: P2; menton: P2; upperLip?: P2 } } | null;
   /** tooth boxes in region coordinates; region.x0 and y0 convert them to canvas pixels */
   teeth: ScreenTooth[];
   region: { x0: number; y0: number };
@@ -113,13 +113,13 @@ export function measureLines(L: RefLines): Finding[] {
       id: "midline", label: "Dental midline vs facial midline",
       value: `${r1(ratio * 100)}% of central width (${sc.tag === "calibrated" ? "" : "about "}${r1(mm)} mm, ${sc.tag}) toward ${side(dx)}`,
       level: ratio > 0.35 ? "check" : ratio > 0.2 ? "note" : "ok",
-      note: "Dental midline is the gap found between the two central teeth boxes; facial midline is the nose-bridge to chin line. Box edges are rough (about 5 to 10% of a central width); the mm figure is an estimate unless calibrated.",
+      note: "Tolerance rule (teaching norm, PMC3010027 and PMC6112329): a shift of more than about 2 mm is tolerated when the dental midline is parallel to the facial midline and perpendicular to the eye line, so the shift alone is not a fault; the direction of the dental midline is not measured here (it is drawn vertical), so check its tilt by eye before acting on this row. Dental midline is the gap found between the two central teeth boxes; facial midline is the nose-bridge to chin line. Box edges are rough (about 5 to 10% of a central width); the mm figure is an estimate unless calibrated.",
     });
     if (L.dmid) {
       const tilt = wrap90(ang(L.dmid[0], L.dmid[1]) - 90);
       const fm = L.mid ? wrap90(ang(L.mid[0], L.mid[1]) - 90) : 0;
       const d = tilt - fm;
-      out.push({ id: "midline-angle", label: "Dental midline angle vs facial midline", value: `${r1(d)}°`, level: Math.abs(d) > 4 ? "check" : Math.abs(d) > 2 ? "note" : "ok", note: "Both midlines should be about parallel. The dental midline is vertical unless the dentist drags it." });
+      out.push({ id: "midline-angle", label: "Dental midline angle vs facial midline", value: `${r1(d)}°`, level: Math.abs(d) > 4 ? "check" : Math.abs(d) > 2 ? "note" : "ok", note: "Cant is noticed by over 90% of raters at about 4° (evidence, PMC3668882), so 4° is the check threshold; 2° for a note is our own screening choice, not a published norm. Both midlines should be about parallel. The dental midline is vertical unless the dentist drags it, so this is not a measured tilt." });
     }
   }
   if (L.inc) {
@@ -218,5 +218,48 @@ export function screen(inp: ScreenInput): Finding[] {
   }
   if (!trusted) out.push({ id: "midline-unreliable", label: "Dental midline and central edges", value: "n/a", level: "note", note: "The row found is not symmetric enough (fewer than 3 teeth on a side, or the two sides differ by more than 30% in width, e.g. a missing, broken or merged tooth), so the dental midline and the central edge heights were not measured. Mark them by eye." });
   if (asym) out.push(asym);
+  out.push(...smileArcFindings(inp));
+  return out;
+}
+
+/** Smile arc class and buccal corridor from the face mesh lip points and the tooth boxes. Informational: no published cut-offs are used,
+ * the classes below are our own screening choice and tooth box bottoms are rough, so every row says check by eye. */
+export function smileArcFindings(inp: ScreenInput): Finding[] {
+  const f = inp.face;
+  const up = inp.teeth.filter((t) => t.incisalDown).sort((a, b) => a.cx - b.cx);
+  if (!f || !f.lowerLip || f.lowerLip.length < 5 || up.length < 5) return [];
+  const mid = up.reduce((s, t) => s + t.cx, 0) / up.length;
+  const six = [...up].sort((a, b) => Math.abs(a.cx - mid) - Math.abs(b.cx - mid)).slice(0, 6).sort((a, b) => a.cx - b.cx);
+  if (six.length < 5) return [];
+  const th = Math.atan2(f.ipl[1].y - f.ipl[0].y, f.ipl[1].x - f.ipl[0].x), c = Math.cos(-th), s_ = Math.sin(-th);
+  const rot = (p: P2): P2 => ({ x: p.x * c - p.y * s_, y: p.x * s_ + p.y * c });
+  const x0 = inp.region.x0, y0 = inp.region.y0;
+  const edge = (t: ScreenTooth) => rot({ x: x0 + t.cx, y: y0 + t.by + t.bh });
+  const e = six.map(edge);
+  const n = e.length;
+  const outer = (e[0].y + e[n - 1].y) / 2;
+  const cen = n === 6 ? (e[2].y + e[3].y) / 2 : e[Math.floor(n / 2)].y;
+  const cw = (six[Math.floor(n / 2)].bw + six[Math.floor(n / 2) - 1].bw) / 2 || 1;
+  const si = cen - outer;
+  const lip = f.lowerLip.map(rot).sort((a, b) => a.x - b.x);
+  const at = (x: number) => { for (let i = 0; i < lip.length - 1; i++) if (x >= lip[i].x && x <= lip[i + 1].x) { const k = (x - lip[i].x) / ((lip[i + 1].x - lip[i].x) || 1); return lip[i].y + k * (lip[i + 1].y - lip[i].y); } return NaN; };
+  const lm = lip[Math.floor(lip.length / 2)].y;
+  const lo = (at(e[0].x) + at(e[n - 1].x)) / 2;
+  const sl = lm - lo;
+  const out: Finding[] = [];
+  if (Number.isFinite(sl)) {
+    const flatTol = 0.04 * cw;
+    let cls: string, why = "";
+    if (si < -flatTol) cls = "reverse";
+    else if (Math.abs(si) <= flatTol || (sl > flatTol && si / sl < 0.5)) cls = "flat";
+    else cls = "consonant";
+    why = `incisal curve sag ${r1((si / cw) * 100)}% of a central width, lower lip curve sag ${r1((sl / cw) * 100)}%`;
+    out.push({ id: "smile-arc", label: "Smile arc (estimated class)", value: `${cls} (${why})`, level: cls === "consonant" ? "ok" : "note", note: "Consonant = incisal edges follow the lower lip curve, flat = less curved than the lip, reverse = centrals higher than the canines (concept: PMC8279119). The class boundaries (flat when the curve sags under 4% of a central width or under half of the lip curve) are our own screening choice, not published cut-offs. Tooth box bottoms are rough, so confirm by eye." });
+  }
+  if (f.mouthInner) {
+    const mw = Math.abs(rot(f.mouthInner[1]).x - rot(f.mouthInner[0]).x);
+    const tw = Math.abs(rot({ x: x0 + six[n - 1].bx + six[n - 1].bw, y: 0 }).x - rot({ x: x0 + six[0].bx, y: 0 }).x);
+    if (mw > 0 && tw < mw) out.push({ id: "buccal", label: "Buccal corridor (informational)", value: `${r1(((mw - tw) / mw) * 100)}% of the smile width (both sides together; ${n} teeth used)`, level: "ok", note: "Dark space beside the last visible tooth. Evidence on whether it affects attractiveness is mixed (PMC8926359), so there is no goal and this never raises a flag. It depends on how many teeth were detected." });
+  }
   return out;
 }

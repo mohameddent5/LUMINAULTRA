@@ -344,6 +344,8 @@ type FaceGuides = {
   /** landmark points for the facial thirds */
   marks?: { glabella: Pt; subnasale: Pt; stomion: Pt; menton: Pt; upperLip?: Pt };
   irisPx?: number;
+  lowerLip?: Pt[];
+  mouthInner?: [Pt, Pt];
 };
 
 function faceGuides(f: { x: number; y: number }[], w: number, h: number): FaceGuides {
@@ -372,6 +374,8 @@ function faceGuides(f: { x: number; y: number }[], w: number, h: number): FaceGu
     mid: [brow, chin],
     com: [cL, cR],
     lipMid,
+    lowerLip: [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308].map(P),
+    mouthInner: [P(78), P(308)],
     irisPx: f.length > 477 ? (Math.hypot(P(469).x - P(471).x, P(469).y - P(471).y) + Math.hypot(P(474).x - P(476).x, P(474).y - P(476).y)) / 2 : undefined,
     marks: { glabella: P(9), subnasale: P(2), stomion: lipMid, menton: chin, upperLip: P(13) },
     comCantDeg: comAng - iplAng,
