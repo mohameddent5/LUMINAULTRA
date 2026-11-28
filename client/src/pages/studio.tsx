@@ -2155,6 +2155,11 @@ export default function Studio() {
                 {designNote.ok ? `${PROPOSAL_LABEL} ${designNote.text}` : `No design drawn: ${designNote.text}`}
               </p>
             )}
+            {designNote?.ok && !bracesSuspected(engine) && (
+              <p className="text-sm text-amber-200" data-testid="braces-note">
+                {lang === "ar" ? "قد لا يتم اكتشاف الحاصرات الشفافة أو الخزفية. إذا كان المريض يرتدي تقويماً، أعد التقاط الصورة بعد إزالته قبل استخدام أي تصميم." : "Clear or ceramic brackets are not always detected. If this patient wears braces, retake the photo after they are removed before using any design."}
+              </p>
+            )}
             {engine && (
               <label className={`flex items-center gap-2 text-base ${muted}`}>
                 <input type="checkbox" checked={showDetect} onChange={(e) => setShowDetect(e.target.checked)} />

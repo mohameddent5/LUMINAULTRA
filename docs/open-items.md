@@ -17,3 +17,10 @@ Regression rows rerun at 5e7abb3 (Nov 28): ex19 (inpainted) tier C, 5 teeth, des
 
 Border accuracy baseline at 938b842 (Nov 28), 18 photos with border labels, all dev photos (none held out), 1280 px frame, 14 px tolerance: pooled recall 114/195 = 0.58, precision 114/165 = 0.69. ex8 and ex16 are refused. Weakest: ex9 3/9, ex12 7/18, ex13 10/22.
 Rejected, not shipped: test-time consensus (original, mirrored, 0.85x runs; keep a border only if the other runs agree within 14 px). Measured on 11 photos: base 72/124 recall, 72/108 precision; keeping borders found in both other runs gives 68/124 recall, 68/96 precision (+0.04 precision, 4 hits lost, ex3, ex6 and ex12 each lose hits). Keeping borders found in at least one other run changes nothing. The variants make the same mistakes, so agreement does not separate wrong borders from right ones.
+
+New labelled photos, Nov 28 (HELD-OUT scores at 938b842, no tuning; decay photos scored with the dots inpainted out; counts are by dot-in-found-tooth-box with a 6 px margin; his marks are by eye):
+- Decay: eba90a87 0 of 2 reachable marked teeth flagged (3 of 5 dots on unfound teeth); e1add5a0 1 of 4 (precision 1 of 1); f7361167 0 of 3 (3 of 6 dots on unfound teeth). Pooled 1 of 9, precision 1 of 1. The finder missed the teeth under 6 of 17 dots, so the finder is the first limit.
+- Stain negative d3d843e5: 0 decay flags, tier A, 10 teeth found, design refused by the outline-quality rule (tier A plus refused is a known inconsistency, not fixed).
+- Braces: two metal-bracket photos of one patient: both tier C, braces flagged, design refused. One third-party ceramic photo (evaluation only): NOT flagged, tier A, design drawn with 2 of 6 ratio teeth. n=1 ceramic, so no ceramic threshold is fitted.
+- Rejected: archwire line cue (healthy teeth reach 1.00 too). Rejected: "tier A needs no ratio-tagged teeth" (healthy ex26 and ex27 also have 2 of 6 ratio teeth).
+- Shipped instead: a standing note under any drawn design when braces are not detected, asking for a retake after removal if the patient wears braces (English and Arabic; the Arabic needs a native read). This is a disclaimer, not detection.
