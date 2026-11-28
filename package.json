@@ -17,6 +17,7 @@
     "test:integrity": "tsx script/test-integrity-audit.ts",
     "test:capture": "tsx script/test-capture-quality.ts",
     "test:spacing": "tsx script/test-spacing.ts",
+    "test:rowguard": "tsx script/test-rowguard.ts",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {

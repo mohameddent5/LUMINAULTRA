@@ -11,6 +11,7 @@
  *
  * Measured (private test): see docs/ and the project report. Not a clinical accuracy claim.
  */
+import { upperRowSuspect as upperRowSuspectFn } from "./rowGuard";
 import * as ort from "onnxruntime-web/wasm";
 import { configureOrt } from "./dentalNet";
 
@@ -218,9 +219,7 @@ export async function samTeeth(
     }
   }
   if (teeth.length < 1) return null;
-  const medAreaRow = [...teeth].map((t) => t.area).sort((x, y) => x - y)[Math.floor(teeth.length / 2)];
-  const rowTop0 = Math.min(...teeth.map((t) => t.y0)), rowX0 = Math.min(...teeth.map((t) => t.x0)), rowX1 = Math.max(...teeth.map((t) => t.x1));
-  const upperRowSuspect = teeth.length >= 1 && keep.some((k) => !teeth.includes(k) && k.x0 > 0 && k.y0 > 0 && k.x1 < ow - 1 && k.y1 < oh - 1 && (k.x0 + k.x1) / 2 > rowX0 && (k.x0 + k.x1) / 2 < rowX1 && k.area > 0.5 * medAreaRow && k.area < 4 * medAreaRow && k.lum > lt && k.cy < rowTop0 - 0.3 * bigH && k.y1 < rowTop0 + 0.2 * bigH && (k.x1 - k.x0) < 2.5 * (big.x1 - big.x0));
+  const upperRowSuspect = upperRowSuspectFn(teeth, keep.filter((k) => !teeth.includes(k)), big, bigH, lt, ow, oh);
   // a failed wide mask often holds one real tooth plus gum or a neighbour: keep only its bright, non-claimed pixels and take the biggest solid blob
   const refineResidual = (k0: Cand, taken: Cand[]): Cand | null => {
     const thr = 0.88 * k0.lum;
