@@ -9,7 +9,7 @@
     "build": "tsx script/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
-    "test": "npm run test:dsd && npm run test:fusion && npm run test:protocol && npm run test:care && npm run test:plausibility && npm run test:integrity && npm run test:capture && npm run test:spacing && npm run test:rowguard && npm run test:flags",
+    "test": "npm run test:dsd && npm run test:fusion && npm run test:protocol && npm run test:care && npm run test:plausibility && npm run test:integrity && npm run test:capture && npm run test:spacing && npm run test:rowguard && npm run test:flags && npm run test:screen",
     "test:dsd": "tsx script/test-dsd.ts",
     "test:fusion": "tsx script/test-fusion.ts",
     "test:protocol": "tsx script/test-protocol.ts",
@@ -19,6 +19,7 @@
     "test:capture": "tsx script/test-capture-quality.ts",
     "test:spacing": "tsx script/test-spacing.ts",
     "test:flags": "tsx script/test-flags.ts",
+    "test:screen": "tsx script/test-screening.ts",
     "test:rowguard": "tsx script/test-rowguard.ts",
     "db:push": "drizzle-kit push"
   },
