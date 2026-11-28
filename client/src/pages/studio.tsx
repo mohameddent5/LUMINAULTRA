@@ -1721,10 +1721,15 @@ export default function Studio() {
     for (const n of notes) y = wrap(x, "• " + n, M, y, W - M * 2, 36);
 
     // record box
-    const by = Math.max(y + 30, 1330);
+    const by = Math.max(y + 30, 1230);
+    const flagLine = engine && bracesSuspected(engine)
+      ? "Flag for the dentist: braces or brackets look present, outlines are less reliable."
+      : engine && lesionFlags(engine).length
+        ? `Flag for the dentist: colour prompt on ${lesionFlags(engine).length} ${lesionFlags(engine).length === 1 ? "tooth" : "teeth"} (possible decay or stain), not a diagnosis.`
+        : "";
     x.fillStyle = "#f1f5f9";
     x.beginPath();
-    x.roundRect(M, by, W - M * 2, 270, 18);
+    x.roundRect(M, by, W - M * 2, 270 + (flagLine ? 38 : 0), 18);
     x.fill();
     x.fillStyle = "#0f172a";
     x.font = "bold 28px sans-serif";
@@ -1736,6 +1741,7 @@ export default function Studio() {
       `Consent: patient agreement confirmed by the dentist${consentAt.current ? " on " + new Date(consentAt.current).toLocaleString() : ""}`,
       `Photo capture: ${quality?.acceptable ? "passed all checks" : "did not pass all checks, treat as a rough idea"}. Preview confidence ${tier}.`,
       `Shape tools: ${shapeOk ? "available for this photo" : "not offered, the photo was not clear enough to reshape teeth honestly"}.`,
+      ...(flagLine ? [flagLine] : []),
       `Edits applied: ${used}. Whitening level: ${levelWord.toLowerCase()}.`,
       `Case ID ${caseId || "-"} | Smile Studio engine 1 | Photo source: ${sourceRef.current}`,
     ];
