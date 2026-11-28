@@ -197,7 +197,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <footer className="border-t border-white/10 px-4 sm:px-6 py-4 flex flex-col sm:flex-row gap-1 sm:items-center sm:justify-between text-[11px] text-muted-foreground">
           <p>Lumina Ultra — Clinical DSD platform · assistive design preview</p>
           <div className="sm:max-w-md">
-            <p>Clinical decision support, not a diagnosis. Data is saved to your clinic account.</p>
+            <p>Clinical decision support, not a diagnosis. Saved cases stay in this browser and, when the server has a database, on your clinic account.</p>
             <details className="mt-1">
               <summary className="cursor-pointer underline underline-offset-2">Intended use and limits</summary>
               <p className="mt-1 leading-relaxed">{INTENDED_USE}</p>
