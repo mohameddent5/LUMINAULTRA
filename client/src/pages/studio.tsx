@@ -1,4 +1,4 @@
-import { lesionFlags } from "@/lib/lesionFlags";
+import { lesionFlags, INVESTIGATIONAL } from "@/lib/lesionFlags";
 import { spacingNotes } from "@/lib/spacingGeometry";
 import { bracesSuspected } from "@/lib/bracesCheck";
 import { INTENDED_USE } from "@/lib/intendedUse";
@@ -1471,7 +1471,7 @@ export default function Studio() {
         : !shapeOk
         ? { ok: false, reason: "The teeth are not clear and separate enough to draw a design honestly (damaged, merged or crowded outlines). No design is drawn." }
         : proposeOutline(upT, region, gumVisibleShare(o, region, upT) >= 0.5, true, analysis && !analysis.close && analysis.outerLip ? analysis.polygon : null, checkTeeth(engine));
-      if (design.ok && checkMode(quality, engine)) design = { ...design, notes: ["CHECK: braces or possible decay were flagged on this photo, so outlines on the marked teeth are less reliable. Verify each marked tooth clinically before using the design.", ...design.notes] };
+      if (design.ok && checkMode(quality, engine)) design = { ...design, notes: ["CHECK: braces or possible decay were flagged on this photo, so outlines on the marked teeth are less reliable. Verify each marked tooth clinically before using the design. Decay flags: " + INVESTIGATIONAL.en + " " + INVESTIGATIONAL.ar, ...design.notes] };
       if (design.ok && analysis?.close) design = { ...design, notes: ["No face in frame: the facial midline and lips were not checked, so the dental midline is used as the reference.", ...design.notes] };
     } else if (engine && region && (engine as { rowSuspect?: boolean }).rowSuspect) design = { ok: false, reason: "The tool may have picked up the lower front teeth instead of the upper ones, because another tooth-sized shape sits above the teeth it found. No design is drawn. Retake with the upper front teeth fully visible and in focus, or check the upper teeth by eye." };
     else if (engine && region) design = { ok: false, reason: "The photo checks did not pass, so no design is drawn." };
@@ -1732,7 +1732,7 @@ export default function Studio() {
     const flagLine = engine && bracesSuspected(engine)
       ? L("Flag for the dentist: braces or brackets look present, outlines are less reliable.", "تنبيه للطبيب: يبدو أن هناك تقويماً أو حاصرات على الأسنان، والمحيطات عليها أقل موثوقية.")
       : engine && lesionFlags(engine).length
-        ? L(`Flag for the dentist: colour prompt on ${lesionFlags(engine).length} ${lesionFlags(engine).length === 1 ? "tooth" : "teeth"} (possible decay or stain), not a diagnosis.`, `تنبيه للطبيب: إشارة لونية على ${lesionFlags(engine).length} ${lesionFlags(engine).length === 1 ? "سن" : "أسنان"} (تسوس محتمل أو تصبغ)، وليست تشخيصاً.`)
+        ? L(`Flag for the dentist: colour prompt on ${lesionFlags(engine).length} ${lesionFlags(engine).length === 1 ? "tooth" : "teeth"} (possible decay or stain), not a diagnosis. ${INVESTIGATIONAL.en}`, `تنبيه للطبيب: إشارة لونية على ${lesionFlags(engine).length} ${lesionFlags(engine).length === 1 ? "سن" : "أسنان"} (تسوس محتمل أو تصبغ)، وليست تشخيصاً. ${INVESTIGATIONAL.ar}`)
         : "";
     x.fillStyle = "#f1f5f9";
     x.beginPath();
@@ -2202,7 +2202,7 @@ export default function Studio() {
                     )}
                     {!bracesSuspected(engine) && quality.acceptable && lesionFlags(engine).length > 0 && (
                       <p className={`text-base ${muted}`} data-testid="flag-caries">
-                        Possible caries on {lesionFlags(engine).length} {lesionFlags(engine).length > 1 ? "teeth" : "tooth"} (dark or brown patches). Not a diagnosis. Verify clinically. Colour only: stain, calculus or a dark filling look the same.
+                        Possible caries on {lesionFlags(engine).length} {lesionFlags(engine).length > 1 ? "teeth" : "tooth"} (dark or brown patches). Not a diagnosis. Verify clinically. Colour only: stain, calculus or a dark filling look the same. <strong data-testid="flag-investigational">{INVESTIGATIONAL.en}</strong> <span dir="rtl" lang="ar">{INVESTIGATIONAL.ar}</span>
                       </p>
                     )}
                     {bracesSuspected(engine) ? (
@@ -2210,7 +2210,7 @@ export default function Studio() {
                     ) : quality.acceptable && tier === "C" && rowSuspect ? (
                       <p className={`text-base ${muted}`}>The tool may have found the lower front teeth instead of the upper ones, so no design is drawn. Retake with the upper front teeth fully visible, or check them by eye.</p>
                     ) : quality.acceptable && tier === "C" ? (
-                      <p className={`text-base ${muted}`}>The photo itself is fine, but dark patches suggest decay or damage. Any design is marked CHECK on those teeth because the shape tools assume sound crowns.</p>
+                      <p className={`text-base ${muted}`}>The photo itself is fine, but dark patches suggest decay or damage. Any design is marked CHECK on those teeth because the shape tools assume sound crowns. <strong>{INVESTIGATIONAL.en}</strong> <span dir="rtl" lang="ar">{INVESTIGATIONAL.ar}</span></p>
                     ) : quality.acceptable ? (
                       <p className={`text-base ${muted}`}>{t.relGoodWhy}</p>
                     ) : (

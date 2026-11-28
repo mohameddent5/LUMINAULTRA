@@ -1,5 +1,6 @@
 /** lesionFlags and bracesCheck on synthetic teeth. Run with `npm run test:flags`. Behaviour pins only, not accuracy claims. */
-import { lesionFlags } from "../client/src/lib/lesionFlags";
+import { readFileSync } from "fs";
+import { lesionFlags, INVESTIGATIONAL } from "../client/src/lib/lesionFlags";
 import { bracesSuspected, tooth_hardware } from "../client/src/lib/bracesCheck";
 let failed = 0;
 const check = (n: string, ok: boolean) => { console.log(`  ${ok ? "ok  " : "FAIL"} ${n}`); if (!ok) failed++; };
@@ -31,5 +32,11 @@ check("braces: clean row false", bracesSuspected(eng([1, 2, 3, 4, 5].map((i) => 
 check("braces: edge-heavy row true", bracesSuspected(eng([1, 2, 3, 4, 5].map((i) => tooth(i, checker)))) === true);
 check("braces: blue-cast row true", bracesSuspected(eng([1, 2, 3, 4, 5].map((i) => tooth(i, blue)))) === true);
 check("braces: 1 of 5 edge-heavy false", bracesSuspected(eng([tooth(1, checker), ...[2, 3, 4, 5].map((i) => tooth(i, smooth))])) === false);
+check("investigational label present in English and Arabic", /Investigational/.test(INVESTIGATIONAL.en) && /dentist/.test(INVESTIGATIONAL.en) && /[\u0600-\u06FF]/.test(INVESTIGATIONAL.ar));
+check("detection unchanged by the label: same flags as before", JSON.stringify(lesionFlags(eng([tooth(1, white), tooth(2, dark)])).map((x) => x.id)) === "[2]");
+{
+  const src = readFileSync("client/src/pages/studio.tsx", "utf8");
+  check("every decay flag surface uses the label (screen, report, CHECK note, tier-C text)", (src.match(/INVESTIGATIONAL\./g) || []).length >= 8);
+}
 console.log(failed ? `flags: ${failed} FAILED` : "flags: all checks passed");
 process.exit(failed ? 1 : 0);

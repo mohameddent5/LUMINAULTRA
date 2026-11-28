@@ -65,3 +65,12 @@ export function lesionFlags(e: TeethEngine | null): ToothFlag[] {
   }
   return out;
 }
+
+/**
+ * Label for every place a decay flag is shown (screen, report, CHECK banner). Wording only: it does not change detection.
+ * The Arabic is not reviewed by a native speaker.
+ */
+export const INVESTIGATIONAL = {
+  en: "Investigational: a dentist must confirm.",
+  ar: "تجريبي: يجب أن يؤكده طبيب الأسنان.",
+};
