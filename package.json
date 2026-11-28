@@ -9,6 +9,7 @@
     "build": "tsx script/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
+    "test": "npm run test:dsd && npm run test:fusion && npm run test:protocol && npm run test:care && npm run test:plausibility && npm run test:integrity && npm run test:capture && npm run test:spacing && npm run test:rowguard",
     "test:dsd": "tsx script/test-dsd.ts",
     "test:fusion": "tsx script/test-fusion.ts",
     "test:protocol": "tsx script/test-protocol.ts",
