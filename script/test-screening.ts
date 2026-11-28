@@ -1,5 +1,5 @@
 /** Screening measurements on synthetic landmarks. Run with `npm run test:screen`. Behaviour pins only. */
-import { screen } from "../client/src/lib/screening";
+import { screen, measureLines } from "../client/src/lib/screening";
 let failed = 0;
 const check = (n: string, ok: boolean) => { console.log(`  ${ok ? "ok  " : "FAIL"} ${n}`); if (!ok) failed++; };
 const tooth = (cx: number, bottom: number, w = 40, h = 52): any => ({ cx, cy: bottom - h / 2, bx: cx - w / 2, by: bottom - h, bw: w, bh: h, incisalDown: true });
@@ -42,6 +42,14 @@ void row;
 {
   const a = screen({ face: face(), teeth: [-130, -86, -43, 43, 86].map((x) => tooth(300 + x, 200)), region });
   check("only 2 teeth on one side: midline and central edges not reported, incisal plane still is", !!get(a, "midline-unreliable") && !get(a, "midline") && !get(a, "incisal-asym") && !!get(a, "incisal-plane"));
+}
+{
+  const L: any = { ipl: [{ x: 0, y: 0 }, { x: 100, y: 0 }], mid: [{ x: 50, y: -50 }, { x: 50, y: 50 }], dmid: [{ x: 60, y: -10 }, { x: 60, y: 10 }], cw: 20 };
+  const a = get(measureLines(L), "midline");
+  check("midline: 10 px at central width 20 px is 50% and about 4.3 mm uncalibrated", /50% of central width \(about 4\.3 mm/.test(a.value) && a.level === "check");
+  const b = get(measureLines({ ...L, pxPerMm: 2 }), "midline");
+  check("calibrated: 10 px at 2 px/mm is 5 mm and is marked calibrated", /5 mm, calibrated/.test(b.value));
+  check("a dragged eye line changes the angle", get(measureLines({ ...L, ipl: [{ x: 0, y: 0 }, { x: 100, y: 10 }] }), "eye-line").value === "5.7°");
 }
 check("fewer than 4 teeth: no dental values", !!get(screen({ face: null, teeth: teeth().slice(0, 3), region }), "no-teeth"));
 console.log(failed ? `screening: ${failed} FAILED` : "screening: all checks passed");

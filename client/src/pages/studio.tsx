@@ -1,5 +1,5 @@
 import { lesionFlags, INVESTIGATIONAL } from "@/lib/lesionFlags";
-import { screen } from "@/lib/screening";
+import { RefLinesEditor } from "@/components/RefLinesEditor";
 import { spacingNotes } from "@/lib/spacingGeometry";
 import { bracesSuspected } from "@/lib/bracesCheck";
 import { INTENDED_USE } from "@/lib/intendedUse";
@@ -2251,26 +2251,9 @@ export default function Studio() {
                     </details>
                   </div>
                 )}
-                {engine && region && quality?.acceptable && (() => {
-                  const fs = screen({ face: analysis?.face || null, teeth: engine.teeth, region });
-                  const dot = (l: string) => (l === "check" ? "bg-red-400" : l === "note" ? "bg-amber-300" : "bg-emerald-400");
-                  return (
-                    <section className={`rounded-2xl p-5 space-y-2 ${card}`} data-testid="dentist-screen" aria-label="Screening for the dentist">
-                      <h2 className="font-semibold">Screening for the dentist</h2>
-                      <p className={`text-sm ${muted}`}>Measured on this one photo with no scale or depth. Cut-offs are not clinically validated. Prompts to look, not findings.</p>
-                      <ul className="space-y-2">
-                        {fs.map((f) => (
-                          <li key={f.id} className="text-base" data-testid={`screen-${f.id}`}>
-                            <span className={`inline-block w-2.5 h-2.5 rounded-full mr-2 align-baseline ${dot(f.level)}`} aria-hidden />
-                            <span className="font-semibold">{f.label}: {f.value}</span>
-                            <span className="sr-only"> ({f.level})</span>
-                            <span className={`block text-sm ${muted}`}>{f.note}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
-                  );
-                })()}
+                {engine && region && quality?.acceptable && originalRef.current && (
+                  <RefLinesEditor src={originalRef.current} input={{ face: analysis?.face || null, teeth: engine.teeth, region }} caseKey={`${caseId}-${photoVersion}`} muted={muted} card={card} />
+                )}
                 <div className={`rounded-2xl p-5 space-y-3 ${card}`}>
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <h2 className="font-semibold">{t.optTitle}</h2>
